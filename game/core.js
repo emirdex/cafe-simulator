@@ -499,7 +499,7 @@ function forecast(st, L, ch) {
   const util = utilCost(st, b) + (b.useFront && !b.flic ? b.aptFee : 0) + (b.aidat || 0) + (L.type === 'pub' || L.type === 'rooftop' ? (90000 * st.world.wageIdx + 15000) : 0);
   const kdv = Math.max(0, (rev - cogs) * (T.kdv / (1 + T.kdv)));
   const pos = rev * .85 * (ch.valor === '30' ? BANKS[ch.bank].pos30 : BANKS[ch.bank].pos0);
-  const pre = rev - cogs - L.rent - rev * (L.ciro || 0) - wages - util - rev * .045 - kdv - pos - 2500 - (c._fcOthers ? 0 : 10000);
+  const pre = rev - cogs - L.rent - rev * (L.ciro || 0) - wages - util - rev * .03 - kdv - pos - 2500 - (c._fcOthers ? 0 : 10000);
   const profit = pre > 0 ? pre * .8 : pre;
   const setup = setupCost(st, L, ch).total;
   return { rev, profit, cust: acc.cust * k / 30, lost: acc.lost * k / 30, setup, payback: profit > 0 ? (setup - L.deposit) / profit : null, sure: !!L.inspected };
@@ -699,7 +699,7 @@ function branchHour(st, b, h) {
     const itS = S.items * C.basket * pm, itT = Math.min(S.items, 1.15) * pm;
     const units = seated * itS + takeaway * itT, mc = b.marginCut && b.marginCut >= st.day ? .9 : 1;
     if (units > 0 && o.fav) { const it = b.mAcc.it || (b.mAcc.it = {}); const per = units / o.fav.length; for (const id of o.fav) { const r = it[id] || (it[id] = [0, 0, 0]); r[0] += per; r[1] += per * b.menu[id].price * mc; r[2] += per * unitCost(st, id) * 1.12; } }
-    rev += units * o.price * mc; cogs += (seated * itS + takeaway * itT) * o.cost * 1.12 + takeaway * itT * 6 * st.world.costIdx; served += got;
+    rev += units * o.price * mc; cogs += (seated * itS + takeaway * itT) * o.cost * 1.0 + takeaway * itT * 6 * st.world.costIdx; served += got;
     const priceSat = o.x > 1 ? -(o.x - 1) * 55 : (1 - o.x) * 10;
     const smk = (x.s === 'ogrenci' || x.s === 'grup' || x.s === 'beyazyaka' || x.s === 'macsever') ? smokePen : 0;
     const sat = 62 + o.q + dek + waitPen + priceSat + smk + (o.fit < .6 ? -6 : 0) + (b.moral - 70) * .15;
@@ -1011,7 +1011,7 @@ function endMonth(st) {
     const ciro = bm.rev * (b.ciro || 0);
     const wages = b.staff * WAGES[b.wage].cost * wageIdx;
     const util = utilCost(st, b) + (b.useFront && !b.flic ? b.aptFee : 0) + (b.aidat || 0) + (b.type === 'pub' || b.type === 'rooftop' ? (90000 * wageIdx + 15000) : 0);
-    const opex = bm.rev * .045; // sarf, temizlik, bakım, fire
+    const opex = bm.rev * .03; // sarf, temizlik, bakım, fire
     const mgr = (b.manager ? b.manager.wage * wageIdx : 0) + (b.interns && b.interns.until >= st.day - 30 ? b.interns.n * 21000 * wageIdx : 0);
     const extra = b.extraRev || 0;
     const kdv = Math.max(0, (bm.rev + extra - bm.cogs) * (T.kdv / (1 + T.kdv)));
