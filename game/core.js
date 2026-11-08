@@ -1303,6 +1303,13 @@ function priceImpact(st, b, changes) {
   const base = demandIdx(st, b); b.menu = m2; computeOffer(st, b); const nw = demandIdx(st, b); b.menu = menu; b._offer = save;
   return { cust: base.d ? nw.d / base.d - 1 : 0, rev: base.r ? nw.r / base.r - 1 : 0, gp: base.g ? nw.g / base.g - 1 : 0 };
 }
+// Önerilen fiyat: semt ortalamasının %85–110'u arasında brüt kârı en yükselten fiyat ("Makul" algısında kalır)
+function suggestPrice(st, b, id) {
+  const m = b.menu[id]; if (!m || !m.on || (PRODUCTS[id].needs && !b.kitchen)) return null;
+  const ref = localRef(st, b, id); let best = { price: m.price, gp: 0 };
+  for (let f = .85; f <= 1.101; f += .025) { const p = Math.max(5, Math.round(ref * f / 5) * 5); if (p === m.price) continue; const g = priceImpact(st, b, { [id]: p }).gp; if (g > best.gp) best = { price: p, gp: g }; }
+  return best.price !== m.price && best.gp > .002 ? best : null;
+}
 function setPrice(st, b, id, price) { if (!b.menu[id] || !isFinite(+price) || +price <= 0) return; price = Math.min(+price, localRef(st, b, id) * 6); st.flags.priceSet = true; b.menu[id].price = Math.max(5, Math.round(price)); computeOffer(st, b); }
 function toggleItem(st, b, id) { if (PRODUCTS[id].needs && !b.kitchen) return; b.menu[id].on = !b.menu[id].on; computeOffer(st, b); }
 function raiseAll(st, b, pct) { for (const id in b.menu) b.menu[id].price = Math.round(b.menu[id].price * (1 + pct) / 5) * 5; computeOffer(st, b); b.boosts.push({ k: 'zam', mult: pct > .08 ? .93 : .97, until: st.day + 10 }); }
@@ -1666,7 +1673,7 @@ function fmtK(v) { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) 
 const _endDay = endDay;
 function endDayWrap(st) { corporateDaily(st); _endDay(st); }
 
-root.KZ = { takeLoan, setClock, clockNow, START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
+root.KZ = { suggestPrice, takeLoan, setClock, clockNow, START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
   DISTRICTS, PROVINCES, PROV, PROFILE, profileOf, provDistricts, comps, SEGS, PRODUCTS, TYPES, ARCH, EQUIP, DECOR, CONCEPTS, WAGES, BANKS, SUPPLY, AGENCIES, RIVALS, STARTS, MONTHS, DAYS, AUD_LABEL,
   newGame, tickHour: function (st) { if (st.over) return; for (const b of st.branches) branchHour(st, b, st.hour); msHour(st); st.hour++; if (st.hour >= 24) { st.hour = 0; endDayWrap(st); msDay(st); } },
   dateOf, dateLabel, monthLabel, weatherLabel, wxOf, WX_N, getListings, refreshListings, inspectListing, listingEstimate, permitsFor, waitDays, conceptsFor, minStaff, defaultChoice, setupCost, openBranch,

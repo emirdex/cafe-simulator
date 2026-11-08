@@ -881,14 +881,33 @@ function bMenu(b) {
   const ranks = T.menu.filter(id => b.menu[id].on && src[id]).map(id => [id, src[id][1] - src[id][2]]).sort((a, c) => a[1] - c[1]);
   const weak = new Set(ranks.length >= 5 ? ranks.slice(0, 2).filter(x => tot && src[x[0]][1] / tot < .05).map(x => x[0]) : []);
   const i5 = K.priceImpact(st, b, { _all: .05 }), i10 = K.priceImpact(st, b, { _all: .1 });
-  return `<div class="card"><div class="row between" style="margin-bottom:6px;gap:10px"><span class="muted" style="font-size:11px">Fiyatı yazarken etkisi anında görünür. ${srcL} satışları ürün bazında.</span><div class="row"><button class="btn sm zb" data-a="raise" data-v=".05">%5 zam ${impTxt(i5)}</button><button class="btn sm zb" data-a="raise" data-v=".1">%10 zam ${impTxt(i10)}</button></div></div>
+  const sg = {}; for (const id of T.menu) { const r = K.suggestPrice(st, b, id); if (r) sg[id] = r; } const nSg = Object.keys(sg).length;
+  return `<div class="card"><div class="row between" style="margin-bottom:6px;gap:10px"><span class="muted" style="font-size:11px">Fiyatı yazarken etkisi anında görünür. ${srcL} satışları ürün bazında.</span><div class="row">${nSg ? `<button class="btn sm pri" data-a="sugall">Önerilen fiyatları uygula (${nSg})</button>` : ''}<button class="btn sm zb" data-a="raise" data-v=".05">%5 zam ${impTxt(i5)}</button><button class="btn sm zb" data-a="raise" data-v=".1">%10 zam ${impTxt(i10)}</button></div></div>
   <div class="tw"><table class="t mnu"><thead><tr><th>Ürün</th><th>Menüde</th><th class="r">Maliyet</th><th class="r">Semt ort.</th><th class="r">Fiyatın</th><th class="r">Marj</th><th>Algı</th><th class="r">${srcL} adet</th><th class="r">Ciro payı</th><th class="r">Brüt katkı</th><th>Etki</th></tr></thead><tbody>
   ${T.menu.map(id => { const P = PRODUCTS[id], m = b.menu[id], c = K.unitCost(st, id), ref = K.localRef(st, b, id), pc = K.perception(st, b, id), net = m.price / (1 + T.kdv), mg = (net - c) / net, locked = P.needs && !b.kitchen; const r = src[id];
     const offImp = m.on && !locked ? K.priceImpact(st, b, { [id]: false }) : null;
-    return `<tr class="${weak.has(id) ? 'weak' : ''}"><td>${esc(P.n)}${locked ? ' <span class="pill">Mutfak gerekir</span>' : ''}${weak.has(id) ? ' <span class="pill warn">Az satıyor</span>' : ''}</td><td><input type="checkbox" data-a="toggle" data-v="${id}" ${m.on && !locked ? 'checked' : ''} ${locked ? 'disabled' : ''} aria-label="${esc(P.n)} menüde"></td><td class="r num">${fmt(c)}</td><td class="r num muted">${fmt(ref)}</td><td class="r"><input class="price" type="number" min="5" step="5" id="pr-${b.id}-${id}" data-a="price" data-v="${id}" value="${m.price}"></td><td class="r num ${mg < .35 ? 'neg' : ''}">%${Math.round(mg * 100)}</td><td><span class="pill ${pc[1]}">${pc[0]}</span></td>
+    return `<tr class="${weak.has(id) ? 'weak' : ''}"><td>${esc(P.n)}${locked ? ' <span class="pill">Mutfak gerekir</span>' : ''}${weak.has(id) ? ' <span class="pill warn">Az satıyor</span>' : ''}</td><td><input type="checkbox" data-a="toggle" data-v="${id}" ${m.on && !locked ? 'checked' : ''} ${locked ? 'disabled' : ''} aria-label="${esc(P.n)} menüde"></td><td class="r num">${fmt(c)}</td><td class="r num muted">${fmt(ref)}</td><td class="r"><div class="prc"><input class="price" type="number" min="5" step="5" id="pr-${b.id}-${id}" data-a="price" data-v="${id}" value="${m.price}"><button class="pen ${ui.pedit === id ? 'on' : ''}" data-a="pedit" data-v="${id}" aria-label="Fiyatı kaydırarak ayarla"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg></button>${sg[id] ? `<button class="sugp ${sg[id].price > m.price ? 'up' : 'dn'}" data-a="sugp" data-v="${id}" data-p="${sg[id].price}" title="Önerilen fiyatı uygula">${sg[id].price > m.price ? '↑' : '↓'} ${fmt(sg[id].price)}</button>` : ''}</div></td><td class="r num ${mg < .35 ? 'neg' : ''}">%${Math.round(mg * 100)}</td><td><span class="pill ${pc[1]}">${pc[0]}</span></td>
       <td class="r num">${r ? Math.round(r[0]).toLocaleString('tr-TR') : '—'}</td><td class="r num">${r && tot ? '%' + Math.round(r[1] / tot * 100) : '—'}</td><td class="r num ${r && r[1] - r[2] < 0 ? 'neg' : ''}">${r ? fmtK(r[1] / (1 + T.kdv) - r[2]) : '—'}</td>
-      <td class="impc" id="imp-${id}">${offImp && weak.has(id) ? '<small class="muted">Çıkarırsan</small> ' + impTxt(offImp) : ''}</td></tr>`; }).join('')}
+      <td class="impc" id="imp-${id}">${offImp && weak.has(id) ? '<small class="muted">Çıkarırsan</small> ' + impTxt(offImp) : ''}</td></tr>${ui.pedit === id ? priceSlider(b, id, ref) : ''}`; }).join('')}
   </tbody></table></div></div>`;
+}
+function priceSlider(b, id, ref) {
+  const m = b.menu[id], lo = Math.max(5, Math.round(ref * .6 / 5) * 5), hi = Math.round(ref * 1.6 / 5) * 5;
+  const v = ui.pval != null ? ui.pval : m.price;
+  return `<tr class="pslide"><td colspan="11"><div class="psl">
+    <button class="btn sm" data-a="pstep" data-v="-5">−5</button>
+    <div class="pstrack"><input type="range" id="ps-${id}" data-a="pslide" data-v="${id}" min="${lo}" max="${hi}" step="5" value="${Math.min(hi, Math.max(lo, v))}" aria-label="${esc(PRODUCTS[id].n)} fiyatı"><div class="psmarks"><span>${fmt(lo)}</span><span>Semt ort. ${fmt(ref)}</span><span>${fmt(hi)}</span></div></div>
+    <button class="btn sm" data-a="pstep" data-v="5">+5</button>
+    <div class="psval"><b class="num" id="psv-${id}">${fmt(v)}</b><span id="psp-${id}">${psPerc(v, ref)}</span></div>
+    <button class="btn sm pri" data-a="papply" data-v="${id}">Uygula</button><button class="btn sm ghost" data-a="pedit" data-v="${id}">Vazgeç</button>
+  </div></td></tr>`;
+}
+function psPerc(v, ref) { const r = v / ref; const p = r < .85 ? ['Ucuz', 'ok'] : r < 1.12 ? ['Makul', 'ok'] : r < 1.35 ? ['Pahalı', 'warn'] : ['Fahiş', 'bad']; return `<span class="pill ${p[1]}">${p[0]}</span>`; }
+function psLive(b, id, v) {
+  ui.pval = v; const ref = K.localRef(st, b, id);
+  const a = $('#psv-' + id), pc = $('#psp-' + id), inp = $('#pr-' + b.id + '-' + id), cell = $('#imp-' + id), rg = $('#ps-' + id);
+  if (a) a.textContent = fmt(v); if (pc) pc.innerHTML = psPerc(v, ref); if (inp) inp.value = v; if (rg && +rg.value !== v) rg.value = v;
+  if (cell) cell.innerHTML = v !== b.menu[id].price ? impTxt(K.priceImpact(st, b, { [id]: v })) : '';
 }
 function bPersonel(b) {
   const minS = K.minStaff(b.concept, b.tables), cs = K.conceptsFor({ arch: b.arch, tables: b.tables, type: b.type });
@@ -1288,6 +1307,11 @@ document.addEventListener('click', e => {
     case 'confirmopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(r.b.status === 'acik' ? r.b.name + ' açıldı. Hayırlı olsun!' : r.b.name + ' kiralandı, ruhsatlar bekleniyor.'); save(); } else toast(r.msg); break; }
     case 'branch': ui.branch = +v; ui.view = 'branch'; ui.btab = 'ozet'; ui.confirm = null; break;
     case 'btab': ui.btab = v; ui.confirm = null; break;
+    case 'pedit': { ui.pedit = ui.pedit === v ? null : v; ui.pval = null; ui._keepScroll = true; break; }
+    case 'pstep': { if (!ui.pedit) return; const rg = $('#ps-' + ui.pedit); const cur = ui.pval != null ? ui.pval : b.menu[ui.pedit].price; const nv = Math.max(5, cur + (+v)); psLive(b, ui.pedit, nv); return; }
+    case 'papply': { const p = ui.pval; if (p > 0 && p !== b.menu[v].price) { K.setPrice(st, b, v, p); toast(K.PRODUCTS[v].n + ' fiyatı ' + fmt(p) + ' oldu.'); save(); } ui.pedit = null; ui.pval = null; ui._keepScroll = true; break; }
+    case 'sugp': { const p = +el.dataset.p; if (p > 0) { K.setPrice(st, b, v, p); toast(K.PRODUCTS[v].n + ' fiyatı ' + fmt(p) + ' oldu.'); save(); } ui._keepScroll = true; break; }
+    case 'sugall': { let n = 0; for (const id of K.TYPES[b.type].menu) { const r = K.suggestPrice(st, b, id); if (r) { K.setPrice(st, b, id, r.price); n++; } } toast(n + ' ürünün fiyatı önerilene çekildi.'); save(); ui._keepScroll = true; break; }
     case 'raise': K.raiseAll(st, b, +v); toast('Fiyatlar %' + Math.round(+v * 100) + ' artırıldı.'); ui._keepScroll = true; break;
     case 'bstaff': { const r = K.changeStaff(st, b, +v); if (!r.ok) toast(r.msg); break; }
     case 'bwage': b.wage = v; break;
@@ -1335,6 +1359,7 @@ document.addEventListener('click', e => {
   render();
 });
 document.addEventListener('input', e => {
+  if (e.target && e.target.dataset && e.target.dataset.a === 'pslide' && st) { const b = st.branches.find(x => x.id === ui.branch); if (b) psLive(b, e.target.dataset.v, +e.target.value); return; }
   if (e.target && e.target.id === 'nm') { ui.startName = e.target.value; const art = document.getElementById('startArt'); if (art) art.innerHTML = startArt(); }
 });
 document.addEventListener('change', e => {
