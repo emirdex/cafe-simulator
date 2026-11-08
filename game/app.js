@@ -1596,3 +1596,5 @@ applyTheme(themeId());
 shell(); render();
 requestAnimationFrame(loop);
 })();
+// Ekran çerçevesi kaydırılmamalı: odaklanan gizli bir giriş tarayıcıya #screen'i kaydırtırsa geri al
+(function () { const fix = e => { const t = e.target; if (t && (t.id === 'screen' || t === document.documentElement || t === document || t === document.body) ) { const el = t === document ? document.scrollingElement : t; if (el && (el.scrollTop || el.scrollLeft)) { el.scrollTop = 0; el.scrollLeft = 0; } } }; document.addEventListener('scroll', fix, true); })();
