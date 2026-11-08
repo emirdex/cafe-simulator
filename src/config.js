@@ -12,6 +12,6 @@ window.KZ_CONFIG = {
   // Test döneminde herkese açık sürüm dosyası okunur: { "notes": "...", "android": { "build": 9, "version": "1.0.9", "url": "..." }, "ios": {...} }
   storeLive: false,
   versionUrl: 'https://raw.githubusercontent.com/emirdex/cafe-simulator-surum/main/version.json',
-  // Mağazadaki ürün kimliklerinin ön eki: 'io.arcbyte.kafezinciri.' + 'cash_m'
-  skuPrefix: 'io.arcbyte.kafezinciri.'
+  // Mağazadaki ürün kimliklerinin ön eki: 'io.arcbyte.cafesimulator.' + 'cash_m'
+  skuPrefix: 'io.arcbyte.cafesimulator.'
 };

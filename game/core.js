@@ -378,6 +378,7 @@ function specialListing(st, did, type) {
     frontTables: Math.max(3, Math.round(area / 20)), aptFee: 0, havaParasi: 0, ciro: 0, aidat: 0, pot: SL.pot, hint: 'Özel lokasyon: ' + SL.d, inspected: true, nearby: [], blocked: '', special: k };
 }
 function getListings(st, did, type) {
+  if (!DISTRICTS[did] || !TYPES[type]) return [];
   const k = listingKey(did, type); const L = st.listings[k];
   const sp = specialListing(st, did, type);
   if (L && L.until > st.day) { if (sp && !L.items.some(x => x.special === sp.special)) L.items.unshift(sp); return L.items; }
@@ -583,7 +584,7 @@ function computeOffer(st, b) {
     for (const id of fav) { pr += b.menu[id].price; ref += localRef(st, b, id); cost += unitCost(st, id); q += supplyQ(st, id); }
     const k = fav.length; pr /= k; ref /= k; cost /= k; q /= k;
     const x = (pr / ref) / S.tol;
-    const prop = x <= 1 ? Math.min(1.3, 1 + (1 - x) * .7) : Math.max(.04, 1 - (x - 1) * 1.5 - (x - 1) * (x - 1) * 3);
+    const prop = x <= 1 ? Math.min(1.3, 1 + (1 - x) * .7) : (x <= 1.37 ? Math.max(.04, 1 - (x - 1) * 1.5 - (x - 1) * (x - 1) * 3) : .04 * Math.pow(1.37 / x, 3));
     res[s] = { fit, price: pr, ref, cost, x, prop, q: q + EQUIP[b.equip].q + (b.manager ? 2 : 0), fav };
   }
   b._offer = res;
@@ -761,7 +762,7 @@ function maybeNewMall(st) {
 /* ---------- oyun içi satın alma ---------- */
 // fiyatlar mağaza fiyat kademelerine göre (₺). Mobil sürümde window.KZIAP.purchase(sku) gerçek ödemeyi yapar.
 // ===== Mağaza =====
-// TL ürünleri App Store / Google Play üzerinden satılır (kimlik: io.arcbyte.kafezinciri.<id>).
+// TL ürünleri App Store / Google Play üzerinden satılır (kimlik: io.arcbyte.cafesimulator.<id>).
 // Altın Çekirdek oyun içi para birimidir: TL ile alınır, görev ve reklamlardan az miktarda kazanılır, görünüm/lokasyon/hız ürünlerinde harcanır.
 const WEEK_MS = 7 * 864e5;
 let clockFn = () => Date.now();
@@ -842,8 +843,8 @@ function applyGive(st, g, mult) {
   return out;
 }
 // TL satın alma (mağaza ödemesi onaylandıktan sonra)
-function iapGive(st, id) {
-  const it = IAP.find(x => x.id === id); if (!it || !iapAvail(st, it)) return { ok: false, msg: 'Bu paket şu an alınamıyor.' };
+function iapGive(st, id, paid) {
+  const it = IAP.find(x => x.id === id); if (!it || (!paid && !iapAvail(st, it))) return { ok: false, msg: 'Bu paket şu an alınamıyor.' };
   const S = iapState(st); const first = !S.firstDone && !it.give.perm && !it.give.noads;
   const out = applyGive(st, it.give, first ? 2 : 1);
   S.firstDone = true; S.owned[id] = (S.owned[id] || 0) + 1; S.spent += it.price; S.last[id] = st.day;
@@ -912,7 +913,7 @@ const GOALS = [
 function goalReward(st, g) { const r = g.r, o = []; if (r.cash) { const v = Math.round(r.cash * st.world.refIdx / 1000) * 1000; st.cash += v; st.month.extra += v; o.push(fmt(v)); } if (r.rep) { st.repBonus = (st.repBonus || 0) + r.rep; o.push('+' + r.rep + ' itibar'); } if (r.followers) { st.mkt.followers += r.followers; o.push('+' + r.followers.toLocaleString('tr-TR') + ' takipçi'); } return o.join(', '); }
 function checkGoals(st) {
   st.goals = st.goals || {};
-  for (const g of GOALS) { if (st.goals[g.id]) continue; let ok = false; try { ok = g.f(st); } catch (e) {} if (ok) { const rw = goalReward(st, g) + ' + ' + earnGold(st, 10) + ' Altın'; st.goals[g.id] = st.day; log(st, 'Hedef tamamlandı: ' + g.n + ' · ödül ' + rw + '.', 'good'); st.queue.push({ k: 'hedef', g: g.id, rw }); } }
+  for (const g of GOALS) { if (st.goals[g.id]) continue; let ok = false; try { ok = g.f(st); } catch (e) {} if (ok) { const S = iapState(st); S.goalGold = S.goalGold || {}; const gg = S.goalGold[g.id] ? 0 : 10; S.goalGold[g.id] = 1; const rw = goalReward(st, g) + (gg ? ' + ' + earnGold(st, gg) + ' Altın' : ''); st.goals[g.id] = st.day; log(st, 'Hedef tamamlandı: ' + g.n + ' · ödül ' + rw + '.', 'good'); st.queue.push({ k: 'hedef', g: g.id, rw }); } }
 }
 
 /* ---------- müşteri yorumları ---------- */
@@ -1179,8 +1180,18 @@ function loanOffers(st) {
   o.push({ id: 'kobi', n: 'KOBİ işletme kredisi', r: .034 + adj, n_: 36, lim: Math.round(ar * 3 * clamp(sc / 1350, .4, 1.4) / 1000) * 1000, ok: months >= 3 && ar > 0, why: months >= 3 ? 'Ciro geçmişine göre limit.' : '3 aylık ciro geçmişi gerekir.' });
   o.push({ id: 'yatirim', n: 'Yatırım kredisi', r: .029 + adj, n_: 48, lim: Math.round(ar * 6 * clamp(sc / 1350, .4, 1.4) / 1000) * 1000, ok: c.all >= 2 && months >= 3, why: c.all >= 2 ? 'Yeni şube veya tesis için, uzun vade.' : 'En az 2 şube gerekir.' });
   const totalPay = st.bank.loans.reduce((a, l) => a + l.pay, 0);
+  // limit, aynı türden açık borç düşülerek hesaplanır (aynı krediyi tekrar tekrar çekme açığı)
+  for (const x of o) { const used = st.bank.loans.filter(l => l.type === x.id).reduce((a, l) => a + l.bal, 0); x.full = x.lim; x.lim = Math.max(0, Math.round((x.lim - used) / 1000) * 1000); if (x.ok && x.lim < 10000) { x.ok = false; x.why = 'Bu kredinin limiti dolu. Borç ödendikçe açılır.'; } }
   for (const x of o) { if (sc < 700) { x.ok = false; x.why = 'Kredi notun çok düşük.'; } if (ar && totalPay > ar * .35 && x.id !== 'ihtiyac') { x.ok = false; x.why = 'Mevcut borç servisin cironun %35\'ini aşıyor.'; } }
   return o;
+}
+// oyuncu arayüzünden kredi: tüm kontroller burada
+function takeLoan(st, id, amt, r) {
+  const o = loanOffers(st).find(x => x.id === id); amt = Math.round(+amt / 1000) * 1000;
+  if (!o || !o.ok) return { ok: false, msg: o ? o.why : 'Kredi bulunamadı.' };
+  if (!(amt > 0) || !isFinite(amt) || amt > o.lim) return { ok: false, msg: 'Tutar limitin üstünde.' };
+  if (!(r > 0) || r < o.r * .8) r = o.r;
+  addLoan(st, id, amt, r, o.n_); return { ok: true };
 }
 function kmhLimit(st) { return Math.round((300000 + avgRev(st, 3) * .4) / 1000) * 1000; }
 
@@ -1200,6 +1211,8 @@ function promoOffer(st) {
   return { staff: n, offers };
 }
 function takePromo(st, bank, per, distribute) {
+  if (st.bank.promo && st.bank.promo.until > st.day) return;
+  const pr = promoOffer(st), o = pr && pr.offers.find(x => x.bank === bank); if (!o) return; per = o.per;
   const n = counts(st).staff; const total = per * n;
   st.bank.payroll = bank; st.bank.promo = { bank, per, until: st.day + 365 * 3, distribute };
   if (distribute) { for (const b of st.branches) b.promoBoost = st.day + 180; log(st, 'Maaş promosyonu (' + fmt(total) + ') personele dağıtıldı. Moral yükseldi.', 'good'); }
@@ -1222,6 +1235,8 @@ function setAgency(st, id) {
   log(st, id === 'none' ? 'Ajans sözleşmesi sonlandırıldı.' : AGENCIES[id].n + ' ile çalışmaya başlandı.', 'info');
 }
 function startCampaign(st, target, budget, days) {
+  budget = Math.round(+budget); days = Math.round(+days);
+  if (!(budget >= 1000) || !isFinite(budget) || ![7, 14, 30].includes(days)) return { ok: false, msg: 'Geçersiz kampanya.' };
   if (st.cash < budget) return { ok: false, msg: 'Nakit yetersiz.' };
   st.cash -= budget; st.month.mkt += budget;
   const fatigue = st.day - st.mkt.lastCampaign < 30 ? .8 : 1; st.mkt.lastCampaign = st.day;
@@ -1288,11 +1303,11 @@ function priceImpact(st, b, changes) {
   const base = demandIdx(st, b); b.menu = m2; computeOffer(st, b); const nw = demandIdx(st, b); b.menu = menu; b._offer = save;
   return { cust: base.d ? nw.d / base.d - 1 : 0, rev: base.r ? nw.r / base.r - 1 : 0, gp: base.g ? nw.g / base.g - 1 : 0 };
 }
-function setPrice(st, b, id, price) { st.flags.priceSet = true; b.menu[id].price = Math.max(5, Math.round(price)); computeOffer(st, b); }
+function setPrice(st, b, id, price) { if (!b.menu[id] || !isFinite(+price) || +price <= 0) return; price = Math.min(+price, localRef(st, b, id) * 6); st.flags.priceSet = true; b.menu[id].price = Math.max(5, Math.round(price)); computeOffer(st, b); }
 function toggleItem(st, b, id) { if (PRODUCTS[id].needs && !b.kitchen) return; b.menu[id].on = !b.menu[id].on; computeOffer(st, b); }
 function raiseAll(st, b, pct) { for (const id in b.menu) b.menu[id].price = Math.round(b.menu[id].price * (1 + pct) / 5) * 5; computeOffer(st, b); b.boosts.push({ k: 'zam', mult: pct > .08 ? .93 : .97, until: st.day + 10 }); }
 function changeStaff(st, b, delta) {
-  const n = b.staff + delta; if (n < 1) return { ok: false, msg: 'En az 1 personel gerekir.' };
+  const n = b.staff + delta; if (n < 1) return { ok: false, msg: 'En az 1 personel gerekir.' }; if (n > 60) return { ok: false, msg: 'Bir şubede en fazla 60 personel olabilir.' };
   if (delta > 0) spend(st, 5000, 'ik');
   else { const sev = Math.round(WAGES[b.wage].cost * st.world.wageIdx * .6); spend(st, sev, 'ik'); b.moral -= 6; }
   b.staff = n; return { ok: true };
@@ -1304,7 +1319,9 @@ function addKitchen(st, b) { if (b.kitchen) return; const c = 250000; if (st.cas
 function toggleFront(st, b) { if (!b.hasFront) return; b.useFront = !b.useFront; b.smoke = b.useFront || ARCH[b.arch].smoke === true; }
 function salePrice(st, b) {
   const lm = b.lastMonth ? b.lastMonth.profit : 0;
-  const good = Math.max(0, lm) * 5;
+  // şerefiye (müşteri portföyü) zamanla oluşur: açıldıktan 12 ay sonra tam değer. Aç-sat döngüsünü engeller.
+  const age = b.status === 'acik' ? Math.max(0, st.day - (b.openedDay != null ? b.openedDay : st.day)) : 0;
+  const good = Math.max(0, lm) * 4 * clamp(age / 365, 0, 1);
   return r1000(b.area * DECOR[b.decor].m2 * .25 + EQUIP[b.equip].cost * .45 + good + (b.havaParasi || 0) * .6);
 }
 function sellBranch(st, b) {
@@ -1649,7 +1666,7 @@ function fmtK(v) { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) 
 const _endDay = endDay;
 function endDayWrap(st) { corporateDaily(st); _endDay(st); }
 
-root.KZ = { setClock, clockNow, START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
+root.KZ = { takeLoan, setClock, clockNow, START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
   DISTRICTS, PROVINCES, PROV, PROFILE, profileOf, provDistricts, comps, SEGS, PRODUCTS, TYPES, ARCH, EQUIP, DECOR, CONCEPTS, WAGES, BANKS, SUPPLY, AGENCIES, RIVALS, STARTS, MONTHS, DAYS, AUD_LABEL,
   newGame, tickHour: function (st) { if (st.over) return; for (const b of st.branches) branchHour(st, b, st.hour); msHour(st); st.hour++; if (st.hour >= 24) { st.hour = 0; endDayWrap(st); msDay(st); } },
   dateOf, dateLabel, monthLabel, weatherLabel, wxOf, WX_N, getListings, refreshListings, inspectListing, listingEstimate, permitsFor, waitDays, conceptsFor, minStaff, defaultChoice, setupCost, openBranch,

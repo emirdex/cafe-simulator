@@ -23,7 +23,7 @@ cp src/native.js src/config.js $OUT/
 {
 echo '<!doctype html><html lang="tr"><head><meta charset="utf-8">'
 echo '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">'
-echo '<meta name="format-detection" content="telephone=no"><title>Kafe Zinciri</title>'
+echo '<meta name="format-detection" content="telephone=no"><title>Cafe Simulator</title>'
 echo '<style>'; printf '%s' "$css"; echo 'html,body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}'; cat $SRC/app.css; echo '</style></head><body>'
 echo '<div id="root"></div>'
 echo '<script src="config.js"></script>'

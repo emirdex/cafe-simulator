@@ -4,7 +4,7 @@ android {
     namespace = "io.arcbyte.kafezinciri"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "io.arcbyte.kafezinciri"
+        applicationId "io.arcbyte.cafesimulator"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // Derleme numarası GitHub Actions'tan gelir (-PversionCode=...)

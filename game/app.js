@@ -14,9 +14,9 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 
 // Hesap cüzdanı: kalıcı satın almalar, Altın ve açılan görünümler kayıttan bağımsız saklanır; yeni oyunda kaybolmaz.
 const WALLET = 'kafe-zinciri-cuzdan';
-function walletOf(S) { return { gold: S.gold || 0, patron: !!S.patron, fast: !!S.fast, akademi: !!S.akademi, noads: !!S.noads, skins: S.skins || {}, themes: S.themes || {}, locs: S.locs || {}, owned: Object.fromEntries(Object.entries(S.owned || {}).filter(([k]) => /^(patron|hizli|akademi|noads|starter|zincir|skin_|theme_|loc_)/.test(k))), firstDone: !!S.firstDone }; }
-function saveWallet() { try { if (st && st.iap) localStorage.setItem(WALLET, JSON.stringify(walletOf(st.iap))); } catch (e) {} }
-function carryWallet(ns) { try { const w = JSON.parse(localStorage.getItem(WALLET) || 'null'); if (!w) return; const S = K.iapState(ns); Object.assign(S, { gold: Math.max(S.gold, w.gold || 0), patron: w.patron, fast: w.fast, akademi: w.akademi, noads: w.noads, skins: w.skins || {}, themes: w.themes || {}, locs: w.locs || {}, firstDone: w.firstDone }); Object.assign(S.owned, w.owned || {}); } catch (e) {} }
+function walletOf(S) { return { gold: S.gold || 0, patron: !!S.patron, fast: !!S.fast, akademi: !!S.akademi, noads: !!S.noads, skins: S.skins || {}, themes: S.themes || {}, locs: S.locs || {}, owned: Object.fromEntries(Object.entries(S.owned || {}).filter(([k]) => /^(patron|hizli|akademi|noads|starter|zincir|skin_|theme_|loc_)/.test(k))), firstDone: !!S.firstDone, goalGold: S.goalGold || {}, ads: st && st.ads ? st.ads : null }; }
+function saveWallet() { try { if (st) localStorage.setItem(WALLET, JSON.stringify(walletOf(K.iapState(st)))); } catch (e) {} }
+function carryWallet(ns) { try { const w = JSON.parse(localStorage.getItem(WALLET) || 'null'); if (!w) return; const S = K.iapState(ns); Object.assign(S, { gold: Math.max(0, w.gold || 0), goalGold: w.goalGold || {}, patron: w.patron, fast: w.fast, akademi: w.akademi, noads: w.noads, skins: w.skins || {}, themes: w.themes || {}, locs: w.locs || {}, firstDone: w.firstDone }); Object.assign(S.owned, w.owned || {}); if (w.ads) ns.ads = w.ads; } catch (e) {} }
 /* ---------- güvenilir saat ----------
    Uygulamada saat internetten alınır (telefon saatini ileri almak işe yaramaz).
    Bağlantı yoksa çevrimdışı ilerleme verilmez; tarayıcı sürümü cihaz saatini kullanır. */
@@ -28,7 +28,8 @@ function syncTime() {
   return TT.syncing = window.KZNetTime().then(t => { TT.syncing = null; if (!t) { TT.ok = false; return false; } TT.base = t; TT.perf = performance.now(); TT.ok = true; return true; }, () => { TT.syncing = null; TT.ok = false; return false; });
 }
 K.setClock(nowT); syncTime();
-function save() { saveWallet(); try { if (st && TT.ok && !TT.syncing) st.savedAt = nowT(); localStorage.setItem(SAVE, JSON.stringify(st)); ui.lastSave = Date.now(); } catch (e) {} }
+let lastSavePerf = performance.now();
+function save() { const pn = performance.now(), fg = pn - lastSavePerf; lastSavePerf = pn; saveWallet(); try { if (st && TT.ok && !TT.syncing) st.savedAt = nowT(); else if (st && st.savedAt) st.savedAt += Math.max(0, Math.min(fg, 6 * 3600e3)); localStorage.setItem(SAVE, JSON.stringify(st)); ui.lastSave = Date.now(); } catch (e) {} }
 function loadSave() { try { const s = localStorage.getItem(SAVE); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function clearSave() { try { localStorage.removeItem(SAVE); } catch (e) {} }
 
@@ -627,7 +628,7 @@ function provPanel(code) {
     return `<button class="dcard ${lk ? 'locked' : ''}" data-a="sel" data-v="${id}"><div><b>${esc(d.n)}${d.central ? ' <small class="cen">merkez</small>' : ''}${!st.branches.length && K.START_REC.some(r => r.d === id) ? ' <small class="cen recb">önerilen</small>' : ''}</b><small>Kira ${fmtK(d.rent * st.world.refIdx)}/m² · trafik ${d.traffic >= 1000 ? 'yüksek' : d.traffic >= 650 ? 'orta' : 'düşük'}</small></div><span class="${lk ? 'pill' : own ? 'pill acc' : 'pill ok'}">${lk ? 'Kilitli' : own ? own + ' şube' : 'Açık'}</span></button>`; }).join('')}</div></div>`).join('')}`;
 }
 function ring(v, label, txt) { const p = Math.max(0, Math.min(1, v)); const C = 2 * Math.PI * 15; return `<div class="rg"><svg viewBox="0 0 36 36" aria-hidden="true"><circle cx="18" cy="18" r="15" class="rt"/><circle cx="18" cy="18" r="15" class="rf" stroke-dasharray="${(C * p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 18 18)"/></svg><b class="num">${txt}</b><small>${label}</small></div>`; }
-function curListings() { return ui.mall ? K.mallListings(st, ui.mall) : K.getListings(st, ui.sel, ui.type); }
+function curListings() { if (ui.mall) return K.mallListings(st, ui.mall) || []; if (!ui.sel || !K.DISTRICTS[ui.sel]) return []; return K.getListings(st, ui.sel, ui.type); }
 const MALL_IC = '<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>';
 function mallPanel(mid) {
   const m = K.mallById(st, mid); if (!m) { ui.mall = null; return ''; } const did = K.mallDid(st, m), d = DISTRICTS[did]; const v = K.mallVac(st, mid); const S = K.MALL_SIZE[m.s];
@@ -676,6 +677,7 @@ const LI = {
   ok: I('<path d="M5 12l4.5 4.5L19 7"/>'), warn: I('<path d="M12 8v5M12 16.5v.5"/><circle cx="12" cy="12" r="9"/>'), no: I('<path d="M7 7l10 10M17 7 7 17"/>')
 };
 function compareSheet() {
+  if (!ui.mall && !DISTRICTS[ui.sel]) { ui.cmp = null; return ''; }
   const ls = curListings(); const d = DISTRICTS[ui.sel];
   const rows = ls.map(L => { const A = ARCH[L.arch]; const ch = K.defaultChoice(st, L); const f = fcGet(L, ch); const cost = K.setupCost(st, L, ch).total;
     const tr = A.tm >= 1.05 ? 'Çok yüksek' : A.tm >= .9 ? 'Yüksek' : A.tm >= .7 ? 'Orta' : 'Düşük'; return { L, A, f, cost, tr }; });
@@ -1174,7 +1176,7 @@ function settingsSheet() {
         <div class="srow"><div><b>Otomatik kayıt</b><small>Her gün sonunda bu cihaza kaydedilir · son kayıt ${saved}</small></div><button class="btn sm" data-a="savenow">Şimdi kaydet</button></div>
         <div class="srow"><div><b>Yeni oyun</b><small>Mevcut ilerleme silinir</small></div>${ui.confirm && ui.confirm.k === 'reset' ? '<div class="row"><button class="btn sm" data-a="cancelconfirm">Vazgeç</button><button class="btn sm danger" data-a="doreset">Evet, sil</button></div>' : '<button class="btn sm danger" data-a="reset">Yeni oyuna başla</button>'}</div>
       </section>
-      <p class="ver">Kafe Zinciri · prototip</p>
+      <p class="ver">Cafe Simulator</p>
     </div></div>`;
 }
 
@@ -1188,7 +1190,7 @@ function renderLayer() {
   if (st.crisis && st.crisis.bankrupt) { const best = st.reports.reduce((m, r) => Math.max(m, r.profit), 0); layer.innerHTML = wrap(`<div class="sheet sm ev crisis"><div class="kick neg">İflas</div><h2>${esc(st.name)} kapandı</h2><p>Bütün şubeler devredildi ama borç kapanmadı. Şirket ${st.day + 1}. günde iflas etti.</p><ul class="cstats"><li><span>Oynanan süre</span><b>${Math.floor((st.day + 1) / 30)} ay</b></li><li><span>En iyi ay</span><b>${fmt(best)}</b></li><li><span>Kalan borç</span><b class="neg">${fmt(Math.max(0, -st.cash))}</b></li></ul><div class="opts"><button class="opt" data-a="doreset"><b>Yeni şirket kur</b><small>Baştan başla, 2 Mn ₺ sermaye.</small></button></div></div>`); return; }
   if (st.crisis && st.crisis.forced) { const C = st.crisis; layer.innerHTML = wrap(`<div class="sheet sm ev crisis"><div class="kick neg">Zorunlu devir</div><h2>Banka şube devri istiyor</h2><p>Kasa ${fmt(st.cash)}${C.loans ? ', kredi borcu ' + fmt(C.loans) : ''}. İhtar süresi doldu. Bir şubeyi yatırımcıya devretmen gerekiyor; ödenen bedel önce eksi bakiyeyi, sonra kredileri kapatır, kalan kasana geçer.</p><div class="opts">${C.offers.map(o => { const b = st.branches.find(x => x.id === o.b); if (!b) return ''; const net = o.price - Math.max(0, -st.cash); return `<button class="opt" data-a="forcedsell" data-v="${o.b}"><b>${esc(b.name)} → ${esc(o.inv)}</b><small>Teklif ${fmt(o.price)} · ${net >= 0 ? 'borç kapanır, ' + fmt(net) + ' artar' : 'borcun ' + fmt(-net) + ' kısmı kalır'}${b.lastMonth ? ' · geçen ay ' + fmtK(b.lastMonth.profit) : ''}</small></button>`; }).join('')}</div><small class="muted" style="font-size:10px">Kredi notun 120 puan düşer. Devralan yatırımcı şubeyi kendi markasıyla işletir.</small></div>`); return; }
   if (ui.setup) { layer.innerHTML = wrap(setupSheet()); return; }
-  if (ui.cmp) { layer.innerHTML = wrap(compareSheet()); return; }
+  if (ui.cmp) { const h = compareSheet(); if (ui.cmp) { layer.innerHTML = wrap(h); return; } }
   if (ui.shop) { layer.innerHTML = wrap(shopSheet()); return; }
   if (ui.settings) { layer.innerHTML = wrap(settingsSheet()); return; }
   if (window.KZUpdate && ui.upd !== 'done' && !ui.setup) { const u = window.KZUpdate;
@@ -1268,14 +1270,14 @@ document.addEventListener('click', e => {
     case 'closesetup': ui.setup = null; ui._keepScroll = true; break;
     case 'ch': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value; ui.setup.ch[el.dataset.k] = v; if (el.dataset.k === 'concept') ui.setup.ch.staff = Math.max(ui.setup.ch.staff, K.minStaff(v, ui.setup.L.tables)); renderLayer(); return; }
     case 'staff': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value; ui.setup.ch.staff = Math.max(1, Math.min(40, ui.setup.ch.staff + +v)); renderLayer(); return; }
-    case 'loanopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const lo = bestLoan(cost - st.cash); if (!lo.o) { toast(lo.why); break; } K.addLoan(st, lo.o.id, lo.amt, lo.q.r, lo.o.n_); const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(fmt(lo.amt) + ' kredi çekildi. ' + r.b.name + (r.b.status === 'acik' ? ' açıldı.' : ' kiralandı.')); sfx('bell'); save(); } else toast(r.msg); break; }
+    case 'loanopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const lo = bestLoan(cost - st.cash); if (!lo.o) { toast(lo.why); break; } const lr = K.takeLoan(st, lo.o.id, lo.amt, lo.q.r); if (!lr.ok) { toast(lr.msg); break; } const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(fmt(lo.amt) + ' kredi çekildi. ' + r.b.name + (r.b.status === 'acik' ? ' açıldı.' : ' kiralandı.')); sfx('bell'); save(); } else toast(r.msg); break; }
     case 'compare': ui.cmp = true; renderLayer(); return;
     case 'shop': ui.shop = true; ui.shopPrev = null; renderLayer(); return;
     case 'setbrand': { if (brandAllowed(v)) { st.brand = Object.assign({}, st.brand || {}, { color: v }); save(); } renderLayer(); return; }
     case 'shoptab': { ui.settings = false; ui.shop = true; ui.shopTab = v; ui.shopPrev = null; renderLayer(); return; }
     case 'settheme': { try { localStorage.setItem(THEME_KEY, v); } catch (e) {} applyTheme(v); renderLayer(); return; }
     case 'closeshop': ui.shop = false; render(); return;
-    case 'buy': { const it = K.IAP.find(x => x.id === v); if (!it) return; buyMock(it).then(ok => { if (!ok) return; const r = K.iapGive(st, v); toast(r.msg); sfx('coin'); save(); render(); }); return; }
+    case 'buy': { const it = K.IAP.find(x => x.id === v); if (!it || ui._buying) return; if (!K.iapAvail(st, it)) { toast('Bu paket şu an alınamıyor.'); return; } ui._buying = true; buyMock(it).then(ok => { ui._buying = false; if (!ok) return; const r = K.iapGive(st, v, true); toast(r.msg); sfx('coin'); save(); render(); }); return; }
     case 'gbuy': { const r = K.goldBuy(st, v); if (!r.ok) { toast(r.msg); if (r.need) { ui.shopTab = 'Kasa'; ui.shopPrev = null; } render(); return; } toast(r.msg); sfx('coin'); ui.shopPrev = null; const it = K.GSHOP.find(x => x.id === v); if (it && it.give.theme) { try { localStorage.setItem(THEME_KEY, it.give.theme); } catch (e) {} applyTheme(it.give.theme); } save(); render(); return; }
     case 'sprev': ui.shopPrev = v; renderLayer(); return;
     case 'sprevx': ui.shopPrev = null; renderLayer(); return;
@@ -1304,7 +1306,7 @@ document.addEventListener('click', e => {
     case 'bvalor': b.valor = b.valor === '30' ? '0' : '30'; toast(b.valor === '30' ? 'Kartlı satışlar 30 gün valörlü.' : 'Blokesiz POS\'a geçildi.'); break;
     case 'sell': ui.confirm = { k: 'sell', v: b.id }; break;
     case 'dosell': { const p = K.sellBranch(st, b); ui.confirm = null; ui.view = 'branches'; toast('Şube ' + fmt(p) + ' karşılığında devredildi.'); save(); break; }
-    case 'loan': { const o = K.loanOffers(st).find(x => x.id === v); const amt = +($('#la-' + v) || {}).value; if (o && amt > 0) { const q = loanQuote(o, amt); K.addLoan(st, v, amt, q.r, o.n_); toast(fmt(amt) + ' hesabına geçti. Aylık %' + (q.r * 100).toFixed(2) + ' faiz.'); save(); } break; }
+    case 'loan': { const o = K.loanOffers(st).find(x => x.id === v); const amt = +($('#la-' + v) || {}).value; if (o && amt > 0) { const q = loanQuote(o, amt); const lr = K.takeLoan(st, v, amt, q.r); if (!lr.ok) { toast(lr.msg); break; } toast(fmt(amt) + ' hesabına geçti. Aylık %' + (q.r * 100).toFixed(2) + ' faiz.'); save(); } break; }
     case 'promo': K.takePromo(st, v, +el.dataset.p, el.dataset.d === '1'); toast(el.dataset.d === '1' ? 'Promosyon personele dağıtıldı.' : 'Promosyon kasaya alındı.'); break;
     case 'post': ui._keepScroll = true; return res(K.postContent(st, v));
     case 'agency': K.setAgency(st, v); ui._keepScroll = true; break;
@@ -1513,7 +1515,8 @@ function shopSheet() {
     <div class="shbody">${ui.shopPrev ? '' : first}${body}<small class="muted shfoot">Altın Çekirdek görevlerden ve günlük ödüllerden de kazanılır. Para ödülleri enflasyonla birlikte büyür.</small></div></div>`;
 }
 function buyMock(it) {
-  if (window.KZIAP && window.KZIAP.purchase) return window.KZIAP.purchase(it.id);
+  if (window.KZIAP && window.KZIAP.purchase) return window.KZIAP.purchase(it.id).catch(() => false);
+  if (window.KZ_NATIVE) { toast('Mağaza şu an kullanılamıyor. İnternet bağlantını kontrol edip tekrar dene.'); return Promise.resolve(false); }
   return new Promise(res => { const box = document.createElement('div'); box.className = 'adov'; box.innerHTML = `<div class="adcard buyc"><div class="adtop"><span>Satın alma</span></div><div class="buyb"><b>${esc(it.n)}</b><span>${esc(it.d)}</span><em>${tl(it.price)}</em><small>Deneme sürümü: gerçek ödeme alınmaz. Mobil sürümde App Store / Google Play ödeme ekranı açılır.</small></div><div class="row" style="gap:8px"><button class="btn" id="byno" style="flex:1;justify-content:center">Vazgeç</button><button class="gold" id="byok" style="flex:1;justify-content:center">Onayla</button></div></div>`;
     document.getElementById('screen').appendChild(box); box.querySelector('#byno').onclick = () => { box.remove(); res(false); }; box.querySelector('#byok').onclick = () => { box.remove(); res(true); }; });
 }
