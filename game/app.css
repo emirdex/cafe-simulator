@@ -1257,3 +1257,12 @@ td.wycell { min-width: 170px; }
 .offl h2 { margin: 2px 0 2px; font-weight: 500; }
 .offl .offamt { font-size: 30px; color: var(--accent); margin: 4px 0 2px; }
 .offl p { margin: 0 0 10px; font-size: 11.5px; }
+
+.klog { margin: 6px 0; padding: 8px 10px; max-height: 120px; overflow: auto; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font: 10px/1.45 var(--f-mono, ui-monospace, monospace); color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+.offl .offamt.neg { color: var(--neg, #e07a6a); }
+
+/* kaydırma performansı (özellikle Android WebView) */
+.view, .side, .sbody, .suleft, .shopb, .bform, .sheet { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.view { contain: layout paint; will-change: scroll-position; touch-action: pan-y; }
+html.lowfx *, html.lowfx *::before, html.lowfx *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+html.lowfx .sheet, html.lowfx .card, html.lowfx .tile { box-shadow: none !important; }

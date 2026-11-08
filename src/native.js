@@ -5,10 +5,45 @@
   var NATIVE = !!(C && C.isNativePlatform && C.isNativePlatform());
   var PLATFORM = NATIVE ? C.getPlatform() : 'web';
   var CFG = window.KZ_CONFIG || {};
+
+  /* 0) Günlük: hatalar ve reklam adımları; Ayarlar › Geliştirici'den kopyalanır */
+  var LOG = window.KZLog = { lines: [], add: function (lvl, msg) {
+    var d = new Date(), t = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2);
+    var line = t + ' ' + lvl + ' ' + String(msg).slice(0, 400); LOG.lines.push(line); if (LOG.lines.length > 300) LOG.lines.shift();
+    try { if (!LOG._t) LOG._t = setTimeout(function () { LOG._t = null; try { localStorage.setItem('kz-log', LOG.lines.join('\n')); } catch (e) {} }, 500); } catch (e) {}
+  }, text: function () { return LOG.lines.join('\n'); } };
+  try { var old = localStorage.getItem('kz-log'); if (old) LOG.lines = old.split('\n').slice(-150).concat(['---- önceki oturum sonu ----']); } catch (e) {}
+  function fmtErr(e) { if (!e) return 'bilinmeyen'; if (typeof e === 'string') return e; return (e.code != null ? '[' + e.code + '] ' : '') + (e.message || e.errorMessage || JSON.stringify(e)); }
+  ['log', 'warn', 'error'].forEach(function (k) { var o = console[k]; console[k] = function () { try { LOG.add(k.toUpperCase(), [].map.call(arguments, function (a) { return typeof a === 'object' ? (a && a.message ? a.message : JSON.stringify(a)) : a; }).join(' ')); } catch (e) {} return o.apply(console, arguments); }; });
+  window.addEventListener('error', function (e) { LOG.add('HATA', (e.message || '') + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno); });
+  window.addEventListener('unhandledrejection', function (e) { LOG.add('HATA', 'promise: ' + fmtErr(e.reason)); });
+  LOG.add('INFO', 'açılış · ' + (C && C.getPlatform ? C.getPlatform() : 'web') + ' · ' + navigator.userAgent);
   window.KZ_NATIVE = NATIVE; window.KZ_PLATFORM = PLATFORM;
 
   function boot() { try { window.__kzBoot && window.__kzBoot(); } finally { if (P.SplashScreen) P.SplashScreen.hide().catch(function () {}); } }
   if (!NATIVE) { boot(); return; }
+  if (PLATFORM === 'android') document.documentElement.classList.add('lowfx');
+  var INFO = null;
+  var infoP = (P.App && P.App.getInfo ? P.App.getInfo() : Promise.reject()).then(function (i) { INFO = i; window.KZ_VERSION = i.version + ' (' + i.build + ')'; LOG.add('INFO', 'sürüm ' + window.KZ_VERSION + ' ' + i.id); return i; }, function () { return null; });
+
+  /* Yeni sürüm kontrolü: mağazadaysa mağazaya, test döneminde sürüm dosyasına bakar */
+  function announce(u) { window.KZUpdate = u; LOG.add('INFO', 'yeni sürüm var: ' + u.version); try { window.dispatchEvent(new Event('kzupdate')); } catch (e) {} }
+  function checkUpdate() {
+    return infoP.then(function (i) {
+      if (CFG.storeLive && P.AppUpdate) {
+        return P.AppUpdate.getAppUpdateInfo().then(function (r) {
+          if (r && r.updateAvailability === 2) announce({ version: r.availableVersionName || r.availableVersionCode || 'yeni', open: function () { P.AppUpdate.openAppStore().catch(function () {}); } });
+        });
+      }
+      if (!CFG.versionUrl || !i) return;
+      return fetch(CFG.versionUrl + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (v) {
+        var cur = parseInt(i.build, 10) || 0, p = v[PLATFORM] || {};
+        if ((p.build || 0) > cur) announce({ version: p.version || ('1.0.' + p.build), notes: v.notes || '', force: !!p.force, open: function () { if (p.url) window.open(p.url, '_system'); } });
+        else LOG.add('INFO', 'sürüm güncel (' + cur + ')');
+      });
+    }).catch(function (e) { LOG.add('INFO', 'sürüm kontrolü yapılamadı: ' + fmtErr(e)); });
+  }
+  if (P.App) P.App.addListener('resume', function () { if (!window.KZUpdate) checkUpdate(); });
 
   /* 1) Kalıcı kayıt: localStorage'daki oyun anahtarları Preferences'a da yazılır.
         iOS WebView hafızası silinse bile kayıt Preferences'tan geri yüklenir. */
@@ -49,31 +84,37 @@
 
   /* 3) Ödüllü reklamlar (AdMob). Kimlikler config.js'te; boşsa Google'ın test reklamları kullanılır. */
   var TEST_REWARDED = { ios: 'ca-app-pub-3940256099942544/1712485313', android: 'ca-app-pub-3940256099942544/5224354917' };
-  var adReady = null;
+  var adReady = null, adInit = null;
   function adId() { var ids = CFG.admobRewarded || {}; return (CFG.adsLive && ids[PLATFORM]) || TEST_REWARDED[PLATFORM]; }
   function adTesting() { var ids = CFG.admobRewarded || {}; return !(CFG.adsLive && ids[PLATFORM]); }
   function prepareAd() {
-    if (!P.AdMob) return Promise.reject(new Error('AdMob yok'));
+    if (!P.AdMob) return Promise.reject(new Error('AdMob eklentisi yok'));
+    LOG.add('REKLAM', 'yükleniyor ' + adId() + (adTesting() ? ' (test)' : ''));
     adReady = P.AdMob.prepareRewardVideoAd({ adId: adId(), isTesting: adTesting() });
-    adReady.catch(function () { adReady = null; });
+    adReady.then(function () { LOG.add('REKLAM', 'yüklendi'); }, function (e) { adReady = null; window.KZAds.lastError = fmtErr(e); LOG.add('REKLAM', 'yüklenemedi: ' + fmtErr(e)); });
     return adReady;
   }
   function initAds() {
     if (!P.AdMob) return Promise.resolve();
     var att = (PLATFORM === 'ios') ? P.AdMob.trackingAuthorizationStatus().then(function (s) {
       if (s && s.status === 'notDetermined') return P.AdMob.requestTrackingAuthorization(); }).catch(function () {}) : Promise.resolve();
-    return att.then(function () { return P.AdMob.initialize({ initializeForTesting: adTesting() }); })
-      .then(function () { prepareAd().catch(function () {}); }).catch(function () {});
+    ['onRewardedVideoAdFailedToLoad', 'onRewardedVideoAdFailedToShow', 'onRewardedVideoAdShowed', 'onRewardedVideoAdDismissed'].forEach(function (ev) {
+      try { P.AdMob.addListener(ev, function (info) { LOG.add('REKLAM', ev.replace('onRewardedVideoAd', '') + (info ? ' ' + fmtErr(info) : '')); }); } catch (e) {} });
+    adInit = att.then(function () { LOG.add('REKLAM', 'AdMob başlatılıyor'); return P.AdMob.initialize({ initializeForTesting: adTesting() }); })
+      .then(function () { LOG.add('REKLAM', 'AdMob hazır'); prepareAd().catch(function () {}); }, function (e) { window.KZAds.lastError = 'başlatılamadı: ' + fmtErr(e); LOG.add('REKLAM', 'AdMob başlatılamadı: ' + fmtErr(e)); });
+    return adInit;
   }
   window.KZAds = {
+    lastError: null,
     showRewarded: function (kind) {
-      if (!P.AdMob) return Promise.resolve(false);
-      var earned = false, h = null;
-      return P.AdMob.addListener('onRewardedVideoAdReward', function () { earned = true; }).then(function (handle) { h = handle;
-        return (adReady || prepareAd()); })
+      if (!P.AdMob) { window.KZAds.lastError = 'AdMob eklentisi yok'; return Promise.resolve(false); }
+      var earned = false, h = null; window.KZAds.lastError = null; LOG.add('REKLAM', 'gösterim istendi: ' + kind);
+      return (adInit || Promise.resolve())
+        .then(function () { return P.AdMob.addListener('onRewardedVideoAdReward', function () { earned = true; LOG.add('REKLAM', 'ödül kazanıldı'); }); })
+        .then(function (handle) { h = handle; return (adReady || prepareAd()); })
         .then(function () { adReady = null; return P.AdMob.showRewardVideoAd(); })
-        .then(function () { return true; }, function () { return earned; })
-        .then(function (ok) { if (h) h.remove(); prepareAd().catch(function () {}); return ok; });
+        .then(function () { return true; }, function (e) { if (!earned) { window.KZAds.lastError = fmtErr(e); LOG.add('REKLAM', 'gösterilemedi: ' + fmtErr(e)); } return earned; })
+        .then(function (ok) { if (h) h.remove(); LOG.add('REKLAM', 'sonuç: ' + (ok ? 'ödül verildi' : 'ödül yok')); prepareAd().catch(function () {}); return ok; });
     }
   };
 
@@ -106,5 +147,5 @@
     if (x) x.click(); else P.App.minimizeApp && P.App.minimizeApp();
   });
 
-  Promise.all([restore(), screen()]).then(boot, boot).then(function () { initAds(); initIAP(); });
+  Promise.all([restore(), screen()]).then(boot, boot).then(function () { initAds(); initIAP(); checkUpdate(); });
 })();

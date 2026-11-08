@@ -5,7 +5,7 @@ const { DISTRICTS, TYPES, ARCH, PRODUCTS, SEGS, EQUIP, DECOR, CONCEPTS, WAGES, B
 const fmt = K.fmt, fmtK = K.fmtK;
 const SAVE = 'kafe-zinciri-v1';
 const W = 844, H = 390;
-const MS_PER_HOUR = 625; // 1 oyun günü = 15 saniye
+const MS_PER_HOUR = 2500; // 1 oyun günü = 1 dakika
 
 let st = null;
 const ui = { view: 'home', sel: null, type: 'kafe', setup: null, branch: null, btab: 'ozet', rep: null, confirm: null, startName: 'Demli Kafe', rotateOk: false, homeIdx: 0, settings: false, ffwd: false };
@@ -398,7 +398,14 @@ function render() {
   const _nb = scr.querySelector('#toasts'); if (_nb) _keepT.forEach(t => _nb.appendChild(t));
   renderLayer(); drainNotes();
 }
-function liveRender() {
+// kaydırma/dokunma sırasında ekranı baştan çizme: sadece üst çubuk güncellenir, tam çizim sonra yapılır
+['touchstart', 'touchmove', 'pointerdown', 'wheel'].forEach(ev => window.addEventListener(ev, () => { ui._touchAt = performance.now(); }, { passive: true, capture: true }));
+window.addEventListener('scroll', () => { ui._touchAt = performance.now(); }, { passive: true, capture: true });
+function hudOnly() { const h = $('#screen .hud2'); if (h) h.outerHTML = hud(); }
+function liveRender(dayChanged) {
+  const busy = performance.now() - (ui._touchAt || 0) < 1500;
+  if (busy || (!dayChanged && ui.view !== 'home')) { hudOnly(); ui._pendingLive = ui._pendingLive || busy || dayChanged; return; }
+  ui._pendingLive = false;
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT') && $('#screen').contains(ae)) { const h = $('#screen .hud2'); if (h) h.outerHTML = hud(); return; }
   if (ui.setup || ui.confirm || ui.settings) return;
@@ -430,7 +437,6 @@ function hud() {
     </div>
     ${monetOn() ? '' : '<!--'}<button class="ibtn shopb2" data-a="shop" aria-label="Mağaza">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</button>${monetOn() ? '' : '-->'}
     <button class="ibtn" data-a="settings" aria-label="Ayarlar">${IC.gear}</button>
-    <button class="gold hend" data-a="endday" ${c.open ? '' : 'disabled'}>Günü bitir ${IC.next}</button>
   </header>`;
 }
 function avgRating() { const o = st.branches.filter(b => b.status === 'acik'); if (!o.length) return '–'; return (o.reduce((a, b) => a + b.rating, 0) / o.length).toFixed(1); }
@@ -1109,6 +1115,10 @@ function settingsSheet() {
         <div class="srow"><div><b>Para gösterimi</b><small>Üst çubuktaki kasa tutarı</small></div><div class="seg"><button class="${P.cashFull ? '' : 'on'}" data-a="cashfmt" data-v="0">Kısa · 2 Mn ₺</button><button class="${P.cashFull ? 'on' : ''}" data-a="cashfmt" data-v="1">Tam</button></div></div>
         <div class="srow"><div><b>Kafe adı</b><small>Tabelada ve hesaplarda görünür</small></div><div class="row"><input type="text" id="rename" maxlength="24" value="${esc(st.name)}" aria-label="Kafe adı"><button class="btn sm" data-a="rename">Kaydet</button></div></div>
       </section>
+      ${window.KZLog ? `<section class="sgroup"><h4>Geliştirici</h4>
+        <div class="srow"><div><b>Sürüm</b><small>${esc(window.KZ_VERSION || 'tarayıcı')}${window.KZUpdate ? ' · yeni sürüm var: ' + esc(window.KZUpdate.version) : ''}</small></div><button class="btn sm" data-a="adtest">Reklamı dene</button></div>
+        <div class="srow col"><div><b>Günlük</b><small>Hata ve reklam adımları. Kopyalayıp Claude'a yapıştırabilirsin.</small></div><pre class="klog">${esc(window.KZLog.lines.slice(-8).join('\n'))}</pre><div class="row"><button class="btn sm" data-a="copylog">Günlüğü kopyala</button></div></div>
+      </section>` : ''}
       <section class="sgroup"><h4>Kayıt</h4>
         <div class="srow"><div><b>Otomatik kayıt</b><small>Her gün sonunda bu cihaza kaydedilir · son kayıt ${saved}</small></div><button class="btn sm" data-a="savenow">Şimdi kaydet</button></div>
         <div class="srow"><div><b>Yeni oyun</b><small>Mevcut ilerleme silinir</small></div>${ui.confirm && ui.confirm.k === 'reset' ? '<div class="row"><button class="btn sm" data-a="cancelconfirm">Vazgeç</button><button class="btn sm danger" data-a="doreset">Evet, sil</button></div>' : '<button class="btn sm danger" data-a="reset">Yeni oyuna başla</button>'}</div>
@@ -1130,8 +1140,10 @@ function renderLayer() {
   if (ui.cmp) { layer.innerHTML = wrap(compareSheet()); return; }
   if (ui.shop) { layer.innerHTML = wrap(shopSheet()); return; }
   if (ui.settings) { layer.innerHTML = wrap(settingsSheet()); return; }
-  if (ui.offline) { const o = ui.offline, h = o.hrs >= 1 ? Math.floor(o.hrs) + ' saat' : Math.round(o.hrs * 60) + ' dakika';
-    layer.innerHTML = wrap(`<div class="sheet sm offl"><div class="offic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M10 7.5v8.5c2.6 0 4.5-1.6 4.5-4M8.5 11.5l5-1.8M8.5 14l5-1.8"/></svg></div><span class="lbl">Sen yokken</span><h2>${h} içinde şubeler çalıştı</h2><div class="offamt num">+${fmt(o.amt)}</div><p class="muted">${o.capped ? 'En fazla 12 saatlik kazanç birikir. ' : ''}Para kasana eklendi.</p><div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px"><button class="gold" data-a="offok">Devam ${IC.next}</button>${adBtn('offline', 'Reklam izle · 2 katı al', '')}</div></div>`); return; }
+  if (window.KZUpdate && ui.upd !== 'done' && !ui.setup) { const u = window.KZUpdate;
+    layer.innerHTML = wrap(`<div class="sheet sm offl"><div class="offic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 19h14"/></svg></div><span class="lbl">Güncelleme</span><h2>Yeni sürüm var · ${esc(u.version)}</h2>${u.notes ? `<p class="muted" style="white-space:pre-line;text-align:left;max-width:360px">${esc(u.notes)}</p>` : '<p class="muted">Yeni özellikler ve düzeltmeler için güncelle.</p>'}<div class="row" style="justify-content:center;gap:8px"><button class="gold" data-a="updnow">Güncelle ${IC.next}</button>${u.force ? '' : '<button class="btn" data-a="updlater">Sonra</button>'}</div></div>`); return; }
+  if (ui.offline) { const o = ui.offline, pos = o.gain >= 0;
+    layer.innerHTML = wrap(`<div class="sheet sm offl"><div class="offic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></div><span class="lbl">Sen yokken</span><h2>${o.days} gün geçti</h2><div class="offamt num ${pos ? '' : 'neg'}">${pos ? '+' : '−'}${fmt(Math.abs(o.gain))}</div><p class="muted">Kasa değişimi · ${fmtK(o.rev)} ciro · ${Math.round(o.cust).toLocaleString('tr-TR')} müşteri${o.capped ? '<br>Oyun kapalıyken en fazla 1 ay ilerler.' : ''}</p><div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px"><button class="gold" data-a="offok">Devam ${IC.next}</button>${o.bonus ? adBtn('offline', 'Reklam izle · +' + fmtK(o.bonus) + ' yatırımcı primi', '') : ''}</div></div>`); return; }
   drainQuiet(); const ev = K.nextEvent(st);
   if (ev) {
     if (ev.k === 'rapor' && !prefs().report) { st.queue.shift(); return renderLayer(); }
@@ -1143,8 +1155,8 @@ function renderLayer() {
   layer.innerHTML = '';
 }
 function checkOffline() {
-  if (!st || ui.offline) return; const o = K.offlineEarn(st, Date.now());
-  if (o) { K.claimOffline(st, o); ui.offline = o; }
+  if (!st || ui.offline) return; const o = K.simulateAway(st, Date.now());
+  if (o) ui.offline = o;
   st.savedAt = Date.now(); save();
 }
 function drainQuiet() {
@@ -1156,7 +1168,7 @@ function drainQuiet() {
     K.resolveEvent(st, ev, 0); toast(c.t + (c.opts[0] && c.opts[0].d ? ' · ' + c.opts[0].d : ''));
   }
 }
-function blocking() { if (st) drainQuiet(); return !!(st && (ui.offline || st.crisis || ui.setup || ui.cmp || ui.shop || ui.settings || K.nextEvent(st))); }
+function blocking() { if (st) drainQuiet(); return !!(st && ((window.KZUpdate && ui.upd !== 'done') || ui.offline || st.crisis || ui.setup || ui.cmp || ui.shop || ui.settings || K.nextEvent(st))); }
 
 /* ---------- etkileşim ---------- */
 document.addEventListener('click', e => {
@@ -1241,6 +1253,10 @@ document.addEventListener('click', e => {
     case 'reset': ui.confirm = { k: 'reset' }; renderLayer(); return;
     case 'doreset': clearSave(); st = null; ui.confirm = null; ui.setup = null; ui.settings = false; render(); return;
     case 'evad': { const ev = K.nextEvent(st); const k = el.dataset.k; if (ev) runAd(k, null, () => K.resolveEvent(st, ev, +v)); return; }
+    case 'copylog': { const t = window.KZLog ? window.KZLog.text() : ''; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Günlük kopyalandı (' + window.KZLog.lines.length + ' satır).'), () => { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Günlük kopyalandı.'); } catch (e) { toast('Kopyalanamadı.'); } ta.remove(); }); return; }
+    case 'adtest': { if (!window.KZAds) { toast('Reklam yalnızca uygulamada çalışır.'); return; } toast('Reklam yükleniyor…'); window.KZAds.showRewarded('test').then(ok => { toast(ok ? 'Reklam çalıştı.' : 'Reklam açılamadı: ' + (window.KZAds.lastError || 'bilinmeyen')); render(); }); return; }
+    case 'updnow': { const u = window.KZUpdate; ui.upd = 'done'; if (u && u.open) u.open(); render(); return; }
+    case 'updlater': { ui.upd = 'done'; render(); return; }
     case 'offok': { ui.offline = null; render(); return; }
     case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral') arg = +v; if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
     case 'evok': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
@@ -1386,7 +1402,7 @@ function showAd(kind) {
 }
 async function runAd(kind, arg, after) {
   if (ui._adBusy) return; ui._adBusy = true;
-  try { const ok = await showAd(kind); if (!ok) { toast('Reklam tamamlanmadı.'); return; } if (after) after(); const r = K.adReward(st, kind, arg); if (r.msg) toast(r.msg); sfx('coin'); save(); }
+  try { const ok = await showAd(kind); if (!ok) { const why = window.KZAds && window.KZAds.lastError; toast(why ? 'Reklam açılamadı: ' + why : 'Reklam tamamlanmadı.'); return; } if (after) after(); const r = K.adReward(st, kind, arg); if (r.msg) toast(r.msg); sfx('coin'); save(); }
   finally { ui._adBusy = false; render(); }
 }
 
@@ -1423,14 +1439,15 @@ function loop(now) {
       acc = 0; ui._keepScroll = true; liveRender();
     } else if (!st.paused) {
       acc += dt; let ticked = false, guard = 0;
-      while (acc >= MS_PER_HOUR && guard++ < 50) { acc -= MS_PER_HOUR; const day = st.day; K.tickHour(st); ticked = true; if (st.day !== day) save(); if (blocking()) { acc = 0; break; } }
-      if (ticked) { liveRender(); coinPop(); } ambience();
+      let dch = false; while (acc >= MS_PER_HOUR && guard++ < 50) { acc -= MS_PER_HOUR; const day = st.day; K.tickHour(st); ticked = true; if (st.day !== day) { save(); dch = true; } if (blocking()) { acc = 0; break; } }
+      if (ticked) { liveRender(dch); coinPop(); } else if (ui._pendingLive && performance.now() - (ui._touchAt || 0) > 1500) liveRender(true); ambience();
     }
   }
   requestAnimationFrame(loop);
 }
 
 /* ---------- başlat ---------- */
+window.addEventListener('kzupdate', () => { if (st) render(); });
 document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) save(); else { checkOffline(); render(); } });
 window.addEventListener('pagehide', () => { if (st) save(); });
 const saved = loadSave();

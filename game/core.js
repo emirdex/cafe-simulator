@@ -796,7 +796,7 @@ function adReward(st, kind, arg) {
   else if (kind === 'incele') { const L = (arg.mall ? mallListings(st, arg.mall) : getListings(st, arg.did, arg.type)).find(x => x.id === arg.id); if (!L || L.inspected) return { ok: false }; L.inspected = true; msg = 'Dükkan ücretsiz incelendi.'; }
   else if (kind === 'aybonus') { const r = st.reports[arg]; if (!r || r.adBonus) return { ok: false }; const v = monthBonus(st, r); r.adBonus = v; st.cash += v; st.month.extra += v; msg = fmt(v) + ' sponsor primi kasaya geçti.'; }
   else if (kind === 'ihtar') { if (!st.bank.warn || st.bank.warn.ad) return { ok: false }; st.bank.warn.until += 5; st.bank.warn.ad = true; msg = 'Banka 5 gün ek süre verdi.'; }
-  else if (kind === 'offline') { const o = st.offlineLast; if (!o || o.doubled) return { ok: false }; o.doubled = true; st.cash += o.amt; st.month.extra += o.amt; msg = 'Kazancın ikiye katlandı: +' + fmt(o.amt) + '.'; }
+  else if (kind === 'offline') { const o = st.offlineLast; if (!o || o.doubled) return { ok: false }; o.doubled = true; st.cash += o.amt; st.month.extra += o.amt; msg = 'Yatırımcı primi: +' + fmt(o.amt) + '.'; }
   else if (kind === 'gunluk') { const v = dailyGift(st); st.cash += v; st.month.extra += v; msg = 'Günlük ödül: ' + fmt(v) + '.'; }
   else if (kind === 'moral') { const b = st.branches.find(x => x.id === arg); if (!b) return { ok: false }; b.moral = Math.min(100, b.moral + 12); msg = 'Ekibe ikram: moral +12.'; }
   else if (kind === 'ariza') { msg = 'Servis ücretsiz geldi.'; }
@@ -892,7 +892,25 @@ function msDay(st) {
       note(st, 'İlk hafta · ' + b.name, '7 günde ' + fmt(rv) + ' ciro, ' + cu.toLocaleString('tr-TR') + ' müşteri, puan ★ ' + b.rating.toFixed(1) + (ls > cu * .1 ? '. ' + ls + ' kişi bekleyemeden gitti, personel ya da masa ekleyebilirsin.' : '.'), true); }
   }
 }
-// uygulama kapalıyken kazanç: her saat yokluk ≈ 0,8 günlük net kâr, en fazla 12 saat
+// uygulama kapalıyken zaman akar: gerçek 1 dakika = 1 oyun günü, en fazla 30 gün (1 ay)
+function simulateAway(st, now) {
+  if (!st || !st.savedAt || st.over) return null;
+  const mins = (now - st.savedAt) / 60000; if (mins < 1) return null;
+  const hours = Math.min(30 * 24, Math.floor(mins * 24)); if (hours < 24) return null;
+  const cash0 = st.cash, day0 = st.day, rev0 = {}; st.branches.forEach(b => { rev0[b.id] = (b.hist || []).length; });
+  const prevNo = st._noEvents; st._noEvents = true; let n = 0;
+  while (n++ < hours && !st.over && !st.crisis) {
+    tickHour(st);
+    // yokken karar isteyen olaylar birikmesin: sadece rapor ve sistem bildirimleri kalır
+    st.queue = st.queue.filter(e => ['rapor', 'asgari', 'kira', 'zarar', 'hedef', 'ihtar', 'avmacilis'].includes(e.k));
+  }
+  st._noEvents = prevNo;
+  let rev = 0, cust = 0; st.branches.forEach(b => { const h = (b.hist || []).slice(-(st.day - day0)); h.forEach(x => { rev += x.rev; cust += x.cust; }); });
+  const gain = st.cash - cash0; st.offlineLast = gain > 0 ? { amt: Math.round(gain * .5 / 500) * 500, doubled: false } : null;
+  log(st, 'Sen yokken ' + (st.day - day0) + ' gün geçti.', gain >= 0 ? 'good' : 'warn');
+  return { days: st.day - day0, gain, rev, cust, capped: mins > 30, bonus: st.offlineLast ? st.offlineLast.amt : 0 };
+}
+// (eski) uygulama kapalıyken kazanç tahmini
 function offlineEarn(st, now) {
   if (!st || !st.savedAt || st.over) return null;
   const mins = (now - st.savedAt) / 60000; if (mins < 10) return null;
@@ -1543,7 +1561,7 @@ function fmtK(v) { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) 
 const _endDay = endDay;
 function endDayWrap(st) { corporateDaily(st); _endDay(st); }
 
-root.KZ = { START_REC, offlineEarn, claimOffline, 
+root.KZ = { START_REC, simulateAway, offlineEarn, claimOffline, 
   DISTRICTS, PROVINCES, PROV, PROFILE, profileOf, provDistricts, comps, SEGS, PRODUCTS, TYPES, ARCH, EQUIP, DECOR, CONCEPTS, WAGES, BANKS, SUPPLY, AGENCIES, RIVALS, STARTS, MONTHS, DAYS, AUD_LABEL,
   newGame, tickHour: function (st) { if (st.over) return; for (const b of st.branches) branchHour(st, b, st.hour); msHour(st); st.hour++; if (st.hour >= 24) { st.hour = 0; endDayWrap(st); msDay(st); } },
   dateOf, dateLabel, monthLabel, weatherLabel, wxOf, WX_N, getListings, refreshListings, inspectListing, listingEstimate, permitsFor, waitDays, conceptsFor, minStaff, defaultChoice, setupCost, openBranch,
