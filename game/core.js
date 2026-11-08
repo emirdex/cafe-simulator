@@ -564,7 +564,7 @@ function monthDrivers(st, b) {
 /* ---------- ekonomi yardımcıları ---------- */
 function supplyMult(st, id) { const l = PRODUCTS[id].line; if (l === 'kahve') return SUPPLY.kahve[st.supply.kahve].mult; if (l === 'tatli') return SUPPLY.tatli[st.supply.tatli].mult; return 1; }
 function supplyQ(st, id) { const l = PRODUCTS[id].line; if (l === 'kahve') return SUPPLY.kahve[st.supply.kahve].q; if (l === 'tatli') return SUPPLY.tatli[st.supply.tatli].q; return 2; }
-function priceIdx(did) { const d = DISTRICTS[did]; return (.75 + .06 * d.elit) * cityScale(d.p).price; }
+function priceIdx(did) { const d = DISTRICTS[did]; return (.75 + .06 * d.elit + .12 * Math.max(0, d.elit - 8)) * cityScale(d.p).price; } // lüks semtlerde (elit 9-10) fiyat seviyesi belirgin yüksek
 function localRef(st, b, id) { return PRODUCTS[id].ref * priceIdx(b.d) * st.world.refIdx; }
 function unitCost(st, id) { return PRODUCTS[id].cost * st.world.costIdx * supplyMult(st, id); }
 function perception(st, b, id) {
