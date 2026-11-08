@@ -70,8 +70,11 @@ function spark(vals, h) {
   return '<svg class="spark" style="height:' + h + 'px" viewBox="0 0 100 ' + h + '" preserveAspectRatio="none"><path class="a" d="' + d + ' L100 ' + h + ' L0 ' + h + ' Z"/><path class="l" d="' + d + '" vector-effect="non-scaling-stroke"/></svg>';
 }
 function meter(label, v, max, txt) { const p = Math.max(0, Math.min(100, v / max * 100)); return '<div class="meter"><span>' + label + '</span><div class="bar"><i style="width:' + p + '%"></i></div><span class="num">' + (txt != null ? txt : Math.round(v)) + '</span></div>'; }
-function celToast(n) { const box = $('#toasts'); if (!box) return; const t = document.createElement('div'); t.className = 'toast cel' + (n.big ? ' big' : ''); t.innerHTML = `<span class="celic">${I('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>')}</span><span><b>${esc(n.t)}</b><small>${esc(n.s)}</small></span>`; box.appendChild(t); setTimeout(() => t.remove(), n.big ? 6000 : 4500); }
-function drainNotes() { if (!st || !st.notes || !st.notes.length) return; const ns = st.notes.splice(0, 3); st.notes.length = 0; ns.forEach((n, i) => setTimeout(() => { celToast(n); if (i === 0) sfx('coin'); }, i * 500)); }
+function celToast(n) { const box = $('#toasts'); if (!box) return; const t = document.createElement('div'); t.className = 'toast cel' + (n.big ? ' big' : ''); t.innerHTML = `<span class="celic">${I('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>')}</span><span><b>${esc(n.t)}</b><small>${esc(n.s)}</small></span>`; box.appendChild(t); setTimeout(() => t.remove(), n.big ? 3800 : 2800); }
+// kutlama bildirimleri tek tek ve olay/rapor penceresi kapalıyken gösterilir (üst üste binmesin)
+const noteQ = []; let noteBusy = false;
+function drainNotes() { if (!st || !st.notes || !st.notes.length) return; noteQ.push(...st.notes.splice(0)); if (noteQ.length > 4) noteQ.splice(0, noteQ.length - 4); pumpNotes(); }
+function pumpNotes() { if (noteBusy || !noteQ.length) return; if (!st || blocking() || ui.setup || ui.settings || ui.shop || ui.offline) { setTimeout(pumpNotes, 900); return; } noteBusy = true; const n = noteQ.shift(); celToast(n); sfx('coin'); setTimeout(() => { noteBusy = false; pumpNotes(); }, n.big ? 3600 : 2600); }
 function toast(m) { const box = $('#toasts'); if (!box) return; const t = document.createElement('div'); t.className = 'toast'; t.textContent = m; box.appendChild(t); setTimeout(() => t.remove(), 3500); }
 function res(r) { if (r && r.msg) toast(r.msg); render(); save(); }
 function typeName(t) { return TYPES[t].n; }
@@ -398,9 +401,14 @@ function safeArea() {
   if (!p) { p = document.createElement('div'); p.id = 'saprobe'; p.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'; document.body.appendChild(p); }
   const c = getComputedStyle(p); return { t: parseFloat(c.paddingTop) || 0, r: parseFloat(c.paddingRight) || 0, b: parseFloat(c.paddingBottom) || 0, l: parseFloat(c.paddingLeft) || 0 };
 }
+let lastFit = null;
 function fit() {
   const dev = $('#device'), clip = $('#clip'), scr = $('#screen'); if (!dev) return;
   const sa = safeArea(); const vw = window.innerWidth - sa.l - sa.r, vh = window.innerHeight - sa.t - sa.b;
+  // klavye açıkken yükseklik düşer: oyunu küçültme, eski ölçekte kal
+  const ae = document.activeElement, typing = ae && (ae.tagName === 'TEXTAREA' || (ae.tagName === 'INPUT' && !/^(checkbox|radio|range|button)$/.test(ae.type)));
+  if (typing && lastFit && lastFit.vw === vw && vh < lastFit.vh * .85) return;
+  lastFit = { vw, vh };
   const portraitPhone = vh > vw && vw < 760;
   const bleed = (vh <= 520 && vw > vh) || portraitPhone || !!window.KZ_NATIVE;
   $('#rotate').classList.toggle('show', portraitPhone && !ui.rotateOk);
@@ -1219,7 +1227,7 @@ function renderLayer() {
   drainQuiet(); const ev = K.nextEvent(st);
   if (ev) {
     if (ev.k === 'rapor' && !prefs().report) { st.queue.shift(); return renderLayer(); }
-    if (ev.k === 'rapor') { const r = st.reports[ev.r] || st.reports[st.reports.length - 1]; layer.innerHTML = wrap(`<div class="sheet sm"><div class="shh"><div><span class="lbl">Ay kapandı</span><h2>${r.label}</h2></div></div>${zReport(r)}${r.branches.some(x => x.why && x.why.pct) ? `<div class="whym"><span class="lbl">Ciro neden değişti</span>${r.branches.filter(x => x.why && x.why.pct).map(x => `<div class="wym"><b>${esc(x.name)}</b><span class="num ${x.why.chg < 0 ? 'neg' : 'pos'}">${x.why.chg < 0 ? '▼' : '▲'} %${Math.round(Math.abs(x.why.chg) * 100)}</span><span class="wys">${whyBlock(x.why, true)}</span></div>`).join('')}</div>` : ''}<div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="gold" data-a="evok" data-v="0">Devam ${IC.next}</button><button class="btn" data-a="evfin">Finansa git</button>${!r.adBonus ? adBtn('aybonus', 'Reklam izle · +' + fmtK(K.monthBonus(st, r)) + ' sponsor primi', st.reports.indexOf(r)) : ''}</div></div>`); return; }
+    if (ev.k === 'rapor') { const r = st.reports[ev.r] || st.reports[st.reports.length - 1]; layer.innerHTML = wrap(`<div class="sheet sm"><div class="shh"><div><span class="lbl">Ay kapandı</span><h2>${r.label}</h2></div></div>${zReport(r)}${r.branches.some(x => x.why && x.why.pct) ? `<div class="whym"><span class="lbl">Ciro neden değişti</span>${r.branches.filter(x => x.why && x.why.pct).map(x => `<div class="wym"><b>${esc(x.name)}</b><span class="num ${x.why.chg < 0 ? 'neg' : 'pos'}">${x.why.chg < 0 ? '▼' : '▲'} %${Math.round(Math.abs(x.why.chg) * 100)}</span><span class="wys">${whyBlock(x.why, true)}</span></div>`).join('')}</div>` : ''}<div class="row sact" style="margin-top:8px;flex-wrap:wrap"><button class="gold" data-a="evok" data-v="0">Devam ${IC.next}</button><button class="btn" data-a="evfin">Finansa git</button>${!r.adBonus ? adBtn('aybonus', 'Reklam izle · +' + fmtK(K.monthBonus(st, r)) + ' sponsor primi', st.reports.indexOf(r)) : ''}</div></div>`); return; }
     const c = K.eventCard(st, ev); if (!c) { st.queue.shift(); return renderLayer(); }
     layer.innerHTML = wrap(`<div class="sheet sm ev" role="dialog" aria-modal="true"><div class="kick">${esc(c.s)}</div><h2>${esc(c.t)}</h2><p>${esc(c.body)}</p><div class="opts">${c.opts.map((o, i) => o.ad ? `<button class="opt adopt" data-a="evad" data-v="${i}" data-k="${o.ad}"><b>${ADI}${esc(o.n)}</b><small>${esc(o.d)}</small></button>` : `<button class="opt" data-a="evok" data-v="${i}"><b>${esc(o.n)}</b><small>${esc(o.d)}</small></button>`).join('')}</div></div>`);
     return;
@@ -1533,7 +1541,7 @@ function shopSheet() {
   else body = `<div class="sxg ${tab === 'Görünüm' || tab === 'Lokasyonlar' ? 'wide' : ''}">${gAv(tab).map(gCard).join('')}</div>`;
   const first = !S.firstDone ? `<div class="shfirst">${I(SHOP_IC.Teklifler)}<span><b>İlk alımına 2 kat!</b> İlk paketinde nakit ve Altın iki katı gelir.</span></div>` : '';
   return `<div class="sheet shop2" role="dialog" aria-modal="true" aria-label="Mağaza">
-    <header class="sth"><span class="sti">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</span><div><h2>Mağaza</h2><small>${S.tickets ? S.tickets + ' ruhsat bileti · ' : ''}${S.noads ? 'Reklamsız · ' : ''}${window.KZIAP ? '' : 'Deneme: ücret alınmaz'}</small></div>
+    <header class="sth"><span class="sti">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</span><div><h2>Mağaza</h2><small>${S.tickets ? S.tickets + ' ruhsat bileti · ' : ''}${S.noads ? 'Reklamsız · ' : ''}${window.KZIAP ? '' : window.KZ_NATIVE ? 'Mağaza bağlantısı bekleniyor' : 'Deneme: ücret alınmaz'}</small></div>
       <button class="goldchip" data-a="shoptab" data-v="Kasa">${GOLD_I}<b class="num">${S.gold.toLocaleString('tr-TR')}</b><span>+</span></button>
       <button class="ibtn" data-a="closeshop" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <nav class="shtabs" role="tablist">${SHOP_TABS.map(t => `<button role="tab" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" data-a="shoptab" data-v="${t}">${I(SHOP_IC[t])}${t}${t === 'Teklifler' && offers.length ? `<i class="dot">${offers.length}</i>` : ''}</button>`).join('')}</nav>
