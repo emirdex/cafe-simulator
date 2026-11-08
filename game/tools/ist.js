@@ -1,0 +1,11 @@
+const fs = require('fs');
+const w = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const [sx, sy] = w.transform.scale, [tx, ty] = w.transform.translate;
+const arcs = w.arcs.map(a => { let x = 0, y = 0; return a.map(([dx, dy]) => { x += dx; y += dy; return [x * sx + tx, y * sy + ty]; }); });
+const arc = i => i >= 0 ? arcs[i] : arcs[~i].slice().reverse();
+const ring = idx => { const out = []; idx.forEach((i, k) => { const a = arc(i); out.push(...(k ? a.slice(1) : a)); }); return out; };
+const g = w.objects.countries.geometries.find(x => x.id === '792');
+const polys = g.type === 'Polygon' ? [g.arcs] : g.arcs;
+let n = 0, pts = [];
+polys.forEach((p, i) => { const r = ring(p[0]); const inb = r.filter(([lo, la]) => lo > 28.3 && lo < 29.6 && la > 40.75 && la < 41.35); if (inb.length) { n++; pts.push([i, r.length, inb.length]); } });
+console.log('polys in bbox', n, JSON.stringify(pts));
