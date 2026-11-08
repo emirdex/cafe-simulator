@@ -780,7 +780,7 @@ function useTicket(st, bid) { const S = iapState(st), b = st.branches.find(x => 
 
 /* ---------- ödüllü reklamlar ---------- */
 // sınırlar gerçek güne göre (mağaza oyunlarındaki gibi); ödüller küçük tutuldu
-const AD_CAP = { ruhsat: 4, ilan: 3, incele: 3, ariza: 2, aybonus: 3, ihtar: 1, gunluk: 1, moral: 2 };
+const AD_CAP = { offline: 4, ruhsat: 4, ilan: 3, incele: 3, ariza: 2, aybonus: 3, ihtar: 1, gunluk: 1, moral: 2 };
 const AD_TOTAL = 15;
 function adDay() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 function adState(st) { const k = adDay(); if (!st.ads || st.ads.day !== k) st.ads = { day: k, n: {}, tot: 0 }; return st.ads; }
@@ -796,6 +796,7 @@ function adReward(st, kind, arg) {
   else if (kind === 'incele') { const L = (arg.mall ? mallListings(st, arg.mall) : getListings(st, arg.did, arg.type)).find(x => x.id === arg.id); if (!L || L.inspected) return { ok: false }; L.inspected = true; msg = 'Dükkan ücretsiz incelendi.'; }
   else if (kind === 'aybonus') { const r = st.reports[arg]; if (!r || r.adBonus) return { ok: false }; const v = monthBonus(st, r); r.adBonus = v; st.cash += v; st.month.extra += v; msg = fmt(v) + ' sponsor primi kasaya geçti.'; }
   else if (kind === 'ihtar') { if (!st.bank.warn || st.bank.warn.ad) return { ok: false }; st.bank.warn.until += 5; st.bank.warn.ad = true; msg = 'Banka 5 gün ek süre verdi.'; }
+  else if (kind === 'offline') { const o = st.offlineLast; if (!o || o.doubled) return { ok: false }; o.doubled = true; st.cash += o.amt; st.month.extra += o.amt; msg = 'Kazancın ikiye katlandı: +' + fmt(o.amt) + '.'; }
   else if (kind === 'gunluk') { const v = dailyGift(st); st.cash += v; st.month.extra += v; msg = 'Günlük ödül: ' + fmt(v) + '.'; }
   else if (kind === 'moral') { const b = st.branches.find(x => x.id === arg); if (!b) return { ok: false }; b.moral = Math.min(100, b.moral + 12); msg = 'Ekibe ikram: moral +12.'; }
   else if (kind === 'ariza') { msg = 'Servis ücretsiz geldi.'; }
@@ -891,6 +892,20 @@ function msDay(st) {
       note(st, 'İlk hafta · ' + b.name, '7 günde ' + fmt(rv) + ' ciro, ' + cu.toLocaleString('tr-TR') + ' müşteri, puan ★ ' + b.rating.toFixed(1) + (ls > cu * .1 ? '. ' + ls + ' kişi bekleyemeden gitti, personel ya da masa ekleyebilirsin.' : '.'), true); }
   }
 }
+// uygulama kapalıyken kazanç: her saat yokluk ≈ 0,8 günlük net kâr, en fazla 12 saat
+function offlineEarn(st, now) {
+  if (!st || !st.savedAt || st.over) return null;
+  const mins = (now - st.savedAt) / 60000; if (mins < 10) return null;
+  const open = st.branches.filter(b => b.status === 'acik'); if (!open.length) return null;
+  let daily = 0; const R = st.reports.slice(-2);
+  if (R.length) daily = R.reduce((a, r) => a + r.profit, 0) / R.length / 30;
+  else open.forEach(b => { const h = (b.hist || []).slice(-7); if (h.length) daily += h.reduce((a, x) => a + x.rev, 0) / h.length * .12; });
+  if (!(daily > 0)) return null;
+  const hrs = Math.min(12, mins / 60), amt = Math.round(daily * hrs * .8 / 500) * 500;
+  if (amt < 1000) return null;
+  return { hrs, amt, capped: mins / 60 > 12 };
+}
+function claimOffline(st, o) { st.cash += o.amt; st.month.extra += o.amt; st.offlineLast = { amt: o.amt, doubled: false }; log(st, 'Sen yokken şubeler ' + fmt(o.amt) + ' kazandı.', 'good'); }
 function tickHour(st) {
   if (st.over) return;
   for (const b of st.branches) branchHour(st, b, st.hour);
@@ -1018,6 +1033,12 @@ function endMonth(st) {
   rep.cashEnd = st.cash;
   rep.cust = Math.round(st.month.cust); rep.lost = Math.round(st.month.lost);
   st.reports.push(rep); if (st.reports.length > 24) st.reports.shift();
+  st.flags = st.flags || {};
+  if (!st.flags.kosgeb && rep.profit < 0 && st.day < 150 && st.branches.length <= 2) {
+    const g = Math.min(150000, Math.round(-rep.profit * .6 / 1000) * 1000);
+    if (g >= 5000) { st.flags.kosgeb = true; st.cash += g; rep.kosgeb = g; log(st, 'KOSGEB girişimci desteği: ' + fmt(g) + ' hibe kasaya geçti.', 'good');
+      (st.notes || (st.notes = [])).push({ t: 'Girişimci desteği', s: 'İlk ayın zorlu geçti. KOSGEB ' + fmt(g) + ' hibe verdi; fiyatları ve personeli gözden geçir.', big: true }); }
+  }
   st.month = blankMonth();
   // kredi notu
   st.bank.score = clamp(st.bank.score + (st.bank.negDays === 0 ? 10 : -st.bank.negDays * 3), 300, 1900);
@@ -1522,7 +1543,7 @@ function fmtK(v) { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) 
 const _endDay = endDay;
 function endDayWrap(st) { corporateDaily(st); _endDay(st); }
 
-root.KZ = { START_REC, 
+root.KZ = { START_REC, offlineEarn, claimOffline, 
   DISTRICTS, PROVINCES, PROV, PROFILE, profileOf, provDistricts, comps, SEGS, PRODUCTS, TYPES, ARCH, EQUIP, DECOR, CONCEPTS, WAGES, BANKS, SUPPLY, AGENCIES, RIVALS, STARTS, MONTHS, DAYS, AUD_LABEL,
   newGame, tickHour: function (st) { if (st.over) return; for (const b of st.branches) branchHour(st, b, st.hour); msHour(st); st.hour++; if (st.hour >= 24) { st.hour = 0; endDayWrap(st); msDay(st); } },
   dateOf, dateLabel, monthLabel, weatherLabel, wxOf, WX_N, getListings, refreshListings, inspectListing, listingEstimate, permitsFor, waitDays, conceptsFor, minStaff, defaultChoice, setupCost, openBranch,

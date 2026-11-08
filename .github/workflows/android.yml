@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,6 +40,15 @@ jobs:
         with:
           name: kafe-zinciri-test-${{ github.run_number }}.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Test APK'sını Releases'a koy
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-${{ github.run_number }}
+          name: Test sürümü ${{ github.run_number }}
+          prerelease: true
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          body: Telefona doğrudan kurulabilen Android test paketi (imzasız, mağaza için değil).
 
       - name: İmzalı mağaza paketi (AAB)
         if: env.HAS_KEYSTORE == 'true'

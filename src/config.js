@@ -1,10 +1,13 @@
 /* Kafe Zinciri · uygulama ayarları
-   Boş bırakılan alanlarda oyun test modunda çalışır (Google test reklamları, deneme satın alma). */
+   adsLive / iapLive false iken oyun test modunda çalışır:
+   Google test reklamları ve oyunun kendi deneme satın alması. Mağaza yayınından hemen önce true yapılır. */
 window.KZ_CONFIG = {
-  // AdMob > Uygulamalar > Reklam birimleri > Ödüllü. Örnek: 'ca-app-pub-XXXXXXXX/YYYYYYYY'
-  admobRewarded: { ios: '', android: '' },
-  // RevenueCat > Project settings > API keys (public). iOS 'appl_...', Android 'goog_...'
-  revenuecat: { ios: '', android: '' },
-  // Mağazadaki ürün kimliklerinin ön eki. Örn. 'io.arcbyte.kafezinciri.' + 'cash_m'
+  adsLive: false,
+  iapLive: false,
+  // AdMob › Cafe Simulator › Reklam birimleri › "Odullu - Oyun ici"
+  admobRewarded: { ios: 'ca-app-pub-4439830504674079/2355113204', android: 'ca-app-pub-4439830504674079/2631454536' },
+  // RevenueCat › Cafe Simulator › API keys (public SDK anahtarları; gizli değildir)
+  revenuecat: { ios: '', android: 'goog_UJTDBzkPjwWamtcVBtAXIanQHOx' },
+  // Mağazadaki ürün kimliklerinin ön eki: 'io.arcbyte.kafezinciri.' + 'cash_m'
   skuPrefix: 'io.arcbyte.kafezinciri.'
 };

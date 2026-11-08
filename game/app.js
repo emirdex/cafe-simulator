@@ -1130,6 +1130,8 @@ function renderLayer() {
   if (ui.cmp) { layer.innerHTML = wrap(compareSheet()); return; }
   if (ui.shop) { layer.innerHTML = wrap(shopSheet()); return; }
   if (ui.settings) { layer.innerHTML = wrap(settingsSheet()); return; }
+  if (ui.offline) { const o = ui.offline, h = o.hrs >= 1 ? Math.floor(o.hrs) + ' saat' : Math.round(o.hrs * 60) + ' dakika';
+    layer.innerHTML = wrap(`<div class="sheet sm offl"><div class="offic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M10 7.5v8.5c2.6 0 4.5-1.6 4.5-4M8.5 11.5l5-1.8M8.5 14l5-1.8"/></svg></div><span class="lbl">Sen yokken</span><h2>${h} içinde şubeler çalıştı</h2><div class="offamt num">+${fmt(o.amt)}</div><p class="muted">${o.capped ? 'En fazla 12 saatlik kazanç birikir. ' : ''}Para kasana eklendi.</p><div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px"><button class="gold" data-a="offok">Devam ${IC.next}</button>${adBtn('offline', 'Reklam izle · 2 katı al', '')}</div></div>`); return; }
   drainQuiet(); const ev = K.nextEvent(st);
   if (ev) {
     if (ev.k === 'rapor' && !prefs().report) { st.queue.shift(); return renderLayer(); }
@@ -1140,6 +1142,11 @@ function renderLayer() {
   }
   layer.innerHTML = '';
 }
+function checkOffline() {
+  if (!st || ui.offline) return; const o = K.offlineEarn(st, Date.now());
+  if (o) { K.claimOffline(st, o); ui.offline = o; }
+  st.savedAt = Date.now(); save();
+}
 function drainQuiet() {
   for (let i = 0; i < 6 && st && !st.crisis; i++) {
     const ev = K.nextEvent(st); if (!ev || ev.k === 'rapor') return;
@@ -1149,7 +1156,7 @@ function drainQuiet() {
     K.resolveEvent(st, ev, 0); toast(c.t + (c.opts[0] && c.opts[0].d ? ' · ' + c.opts[0].d : ''));
   }
 }
-function blocking() { if (st) drainQuiet(); return !!(st && (st.crisis || ui.setup || ui.cmp || ui.shop || ui.settings || K.nextEvent(st))); }
+function blocking() { if (st) drainQuiet(); return !!(st && (ui.offline || st.crisis || ui.setup || ui.cmp || ui.shop || ui.settings || K.nextEvent(st))); }
 
 /* ---------- etkileşim ---------- */
 document.addEventListener('click', e => {
@@ -1159,7 +1166,7 @@ document.addEventListener('click', e => {
   if (a === 'rotateok') { ui.rotateOk = true; fit(); return; }
   if (a === 'brand') { ui.brand = brandOf(ui.brand); ui.brand[el.dataset.k] = v; const nm = $('#nm'); if (nm) ui.startName = nm.value; const sv = $('#nm') && $('#nm').selectionStart; render(); const n2 = $('#nm'); return; }
   if (a === 'newgame') { const nm = $('#nm'); st = K.newGame({ name: (nm && nm.value) || 'Demli Kafe' }); st.brand = brandOf(ui.brand); ui.view = 'home'; ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; render(); save(); return; }
-  if (a === 'continue') { st = loadSave(); if (!st) return; migrate(st); st.paused = true; if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return; }
+  if (a === 'continue') { st = loadSave(); if (!st) return; migrate(st); st.paused = true; checkOffline(); if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return; }
   if (!st) return;
   const b = st.branches.find(x => x.id === ui.branch);
   switch (a) {
@@ -1234,7 +1241,8 @@ document.addEventListener('click', e => {
     case 'reset': ui.confirm = { k: 'reset' }; renderLayer(); return;
     case 'doreset': clearSave(); st = null; ui.confirm = null; ui.setup = null; ui.settings = false; render(); return;
     case 'evad': { const ev = K.nextEvent(st); const k = el.dataset.k; if (ev) runAd(k, null, () => K.resolveEvent(st, ev, +v)); return; }
-    case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral') arg = +v; if (k === 'aybonus') arg = +v; if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
+    case 'offok': { ui.offline = null; render(); return; }
+    case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral') arg = +v; if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
     case 'evok': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
     case 'evfin': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, 0); ui.view = 'finance'; ui.rep = null; break; }
     case 'forcedsell': K.forcedTransfer(st, +v); save(); break;
@@ -1350,7 +1358,7 @@ function shopSheet() {
   const S = K.iapState(st); const cats = ['Teklif', 'Kasa', 'İtibar', 'Hız', 'Premium'];
   const val = it => { const g = it.give; return [g.cash ? fmtK(g.cash * st.world.refIdx) : '', g.rep ? '+' + g.rep + ' itibar' : '', g.followers ? '+' + (g.followers / 1000) + ' B takipçi' : '', g.tickets ? g.tickets + ' bilet' : '', g.moralAll ? 'moral +' + g.moralAll : '', g.score ? 'not +' + g.score : '', g.noads ? 'Reklamsız' : ''].filter(Boolean).join(' · '); };
   return `<div class="sheet shop" role="dialog" aria-modal="true" aria-label="Mağaza"><header class="sth"><span class="sti">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</span><div><h2>Mağaza</h2><small>${S.tickets ? S.tickets + ' ruhsat biletin var · ' : ''}${S.noads ? 'Reklamsız aktif · ' : ''}Deneme sürümü: ücret alınmaz</small></div><button class="ibtn" data-a="closeshop" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
-    <div class="shopb">${cats.map(c => { const its = K.IAP.filter(x => x.cat === c && K.iapAvail(st, x)); if (!its.length) return ''; return `<section class="shc"><h4>${c}</h4><div class="shg ${c === 'Teklif' ? 'one' : ''}">${its.map(it => `<button class="shi ${it.cat === 'Teklif' ? 'hero' : ''}" data-a="buy" data-v="${it.id}">${it.tag ? `<span class="shtag">${esc(it.tag)}</span>` : ''}<span class="shic">${I(SHOP_IC[it.cat])}</span><b>${esc(it.n)}</b><small>${esc(it.d)}</small><span class="shv">${val(it)}</span><span class="shp">${tl(it.price)}</span></button>`).join('')}</div></section>`; }).join('')}
+    <div class="shopb">${cats.map(c => { const its = K.IAP.filter(x => x.cat === c && K.iapAvail(st, x)); if (!its.length) return ''; return `<section class="shc"><h4>${c}</h4><div class="shg ${c === 'Teklif' ? 'one' : ''}">${its.map(it => `<button class="shi ${it.cat === 'Teklif' ? 'hero' : ''}" data-a="buy" data-v="${it.id}">${it.tag ? `<span class="shtag">${esc(it.tag)}</span>` : ''}<span class="shic">${I(SHOP_IC[it.cat])}</span><b>${esc(it.n)}</b><small>${esc(it.d)}</small><span class="shv">${val(it)}</span><span class="shp">${(window.KZIAP && KZIAP.prices && KZIAP.prices[it.id]) || tl(it.price)}</span></button>`).join('')}</div></section>`; }).join('')}
     <small class="muted" style="font-size:9.5px;display:block;margin-top:6px">Para ödülleri enflasyonla birlikte büyür. Satın almalar sadece bu kayda işler.</small></div></div>`;
 }
 function buyMock(it) {
@@ -1423,7 +1431,7 @@ function loop(now) {
 }
 
 /* ---------- başlat ---------- */
-document.addEventListener('visibilitychange', () => { if (document.hidden && st) save(); });
+document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) save(); else { checkOffline(); render(); } });
 window.addEventListener('pagehide', () => { if (st) save(); });
 const saved = loadSave();
 if (saved && saved.v === 1) ui.startName = saved.name;

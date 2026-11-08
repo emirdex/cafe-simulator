@@ -1249,3 +1249,11 @@ td.wycell { min-width: 170px; }
 .scene.empty0 .e0 { align-items: flex-start; text-align: left; max-width: 52%; padding: 0 18px 0 0; }
 .home2 .hl > .scene.empty0:only-child { flex: 1; }
 .arow b { font-size: 12px; }
+
+/* sen yokken */
+.offl { text-align: center; align-items: center; display: flex; flex-direction: column; gap: 4px; padding-top: 18px; }
+.offl .offic { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); margin-bottom: 4px; }
+.offl .offic svg { width: 22px; height: 22px; }
+.offl h2 { margin: 2px 0 2px; font-weight: 500; }
+.offl .offamt { font-size: 30px; color: var(--accent); margin: 4px 0 2px; }
+.offl p { margin: 0 0 10px; font-size: 11.5px; }

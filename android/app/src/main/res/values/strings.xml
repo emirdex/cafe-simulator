@@ -4,5 +4,5 @@
     <string name="title_activity_main">Kafe Zinciri</string>
     <string name="package_name">io.arcbyte.kafezinciri</string>
     <string name="custom_url_scheme">io.arcbyte.kafezinciri</string>
-    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
+    <string name="admob_app_id">ca-app-pub-4439830504674079~4550031708</string>
 </resources>

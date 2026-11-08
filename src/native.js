@@ -50,8 +50,8 @@
   /* 3) Ödüllü reklamlar (AdMob). Kimlikler config.js'te; boşsa Google'ın test reklamları kullanılır. */
   var TEST_REWARDED = { ios: 'ca-app-pub-3940256099942544/1712485313', android: 'ca-app-pub-3940256099942544/5224354917' };
   var adReady = null;
-  function adId() { var ids = CFG.admobRewarded || {}; return ids[PLATFORM] || TEST_REWARDED[PLATFORM]; }
-  function adTesting() { var ids = CFG.admobRewarded || {}; return !ids[PLATFORM]; }
+  function adId() { var ids = CFG.admobRewarded || {}; return (CFG.adsLive && ids[PLATFORM]) || TEST_REWARDED[PLATFORM]; }
+  function adTesting() { var ids = CFG.admobRewarded || {}; return !(CFG.adsLive && ids[PLATFORM]); }
   function prepareAd() {
     if (!P.AdMob) return Promise.reject(new Error('AdMob yok'));
     adReady = P.AdMob.prepareRewardVideoAd({ adId: adId(), isTesting: adTesting() });
@@ -78,7 +78,7 @@
   };
 
   /* 4) Uygulama içi satın alma (RevenueCat). Anahtar yoksa oyun kendi deneme satın almasını kullanır. */
-  var rcKey = (CFG.revenuecat || {})[PLATFORM];
+  var rcKey = CFG.iapLive ? (CFG.revenuecat || {})[PLATFORM] : null;
   function initIAP() {
     if (!P.Purchases || !rcKey) return Promise.resolve();
     return P.Purchases.configure({ apiKey: rcKey }).then(function () {
@@ -89,8 +89,14 @@
             var prod = (r.products || [])[0]; if (!prod) throw new Error('Ürün bulunamadı: ' + id);
             return P.Purchases.purchaseStoreProduct({ product: prod });
           }).then(function () { return true; }, function (e) { if (!(e && (e.userCancelled || e.code === '1'))) console.warn('IAP', e); return false; });
-        }
+        },
+        prices: {}
       };
+      // mağazadaki yerel fiyatları oyundaki mağaza ekranına aktar
+      var ids = ['starter','cash_s','cash_m','cash_l','rep_s','rep_l','fol','tickets','moral','score','noads'];
+      return P.Purchases.getProducts({ productIdentifiers: ids.map(function (x) { return (CFG.skuPrefix || '') + x; }), type: 'NON_SUBSCRIPTION' }).then(function (r) {
+        (r.products || []).forEach(function (p) { var k = p.identifier.replace(CFG.skuPrefix || '', ''); window.KZIAP.prices[k] = p.priceString; });
+      }).catch(function () {});
     }).catch(function (e) { console.warn('RevenueCat', e); });
   }
 
