@@ -764,7 +764,10 @@ function maybeNewMall(st) {
 // TL ürünleri App Store / Google Play üzerinden satılır (kimlik: io.arcbyte.kafezinciri.<id>).
 // Altın Çekirdek oyun içi para birimidir: TL ile alınır, görev ve reklamlardan az miktarda kazanılır, görünüm/lokasyon/hız ürünlerinde harcanır.
 const WEEK_MS = 7 * 864e5;
-function weekNo(now) { return Math.floor(((now || Date.now()) + 3 * 864e5) / WEEK_MS); } // haftalar pazartesi başlar
+let clockFn = () => Date.now();
+function setClock(f) { clockFn = f; }
+function clockNow() { return clockFn(); }
+function weekNo(now) { return Math.floor(((now || clockFn()) + 3 * 864e5) / WEEK_MS); } // haftalar pazartesi başlar
 function weekEnds(now) { return (weekNo(now) + 1) * WEEK_MS - 3 * 864e5; }
 const IAP = [
   // Teklifler (zamanlı / duruma göre)
@@ -862,7 +865,7 @@ function useTicket(st, bid) { const S = iapState(st), b = st.branches.find(x => 
 // sınırlar gerçek güne göre (mağaza oyunlarındaki gibi); ödüller küçük tutuldu
 const AD_CAP = { offline: 4, ruhsat: 4, ilan: 3, incele: 3, ariza: 2, aybonus: 3, ihtar: 1, gunluk: 1, moral: 2 };
 const AD_TOTAL = 15;
-function adDay() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function adDay() { const d = new Date(clockFn()); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 function adState(st) { const k = adDay(); if (!st.ads || st.ads.day !== k) st.ads = { day: k, n: {}, tot: 0 }; return st.ads; }
 function adLeft(st, kind) { const a = adState(st); return Math.max(0, Math.min((AD_CAP[kind] || 1) - (a.n[kind] || 0), AD_TOTAL - a.tot)); }
 function adMark(st, kind) { const a = adState(st); a.n[kind] = (a.n[kind] || 0) + 1; a.tot++; }
@@ -1646,7 +1649,7 @@ function fmtK(v) { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) 
 const _endDay = endDay;
 function endDayWrap(st) { corporateDaily(st); _endDay(st); }
 
-root.KZ = { START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
+root.KZ = { setClock, clockNow, START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
   DISTRICTS, PROVINCES, PROV, PROFILE, profileOf, provDistricts, comps, SEGS, PRODUCTS, TYPES, ARCH, EQUIP, DECOR, CONCEPTS, WAGES, BANKS, SUPPLY, AGENCIES, RIVALS, STARTS, MONTHS, DAYS, AUD_LABEL,
   newGame, tickHour: function (st) { if (st.over) return; for (const b of st.branches) branchHour(st, b, st.hour); msHour(st); st.hour++; if (st.hour >= 24) { st.hour = 0; endDayWrap(st); msDay(st); } },
   dateOf, dateLabel, monthLabel, weatherLabel, wxOf, WX_N, getListings, refreshListings, inspectListing, listingEstimate, permitsFor, waitDays, conceptsFor, minStaff, defaultChoice, setupCost, openBranch,

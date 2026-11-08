@@ -42,3 +42,34 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return config
     }
 }
+
+// MARK: - Kafe Zinciri: iCloud yedeği
+// Oyun kaydı ve Altın cüzdanı iCloud anahtar-değer deposuna da yazılır;
+// uygulama silinip yeniden yüklenince (aynı Apple Kimliği) geri gelir.
+@objc(KZCloudPlugin)
+public class KZCloudPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "KZCloudPlugin"
+    public let jsName = "KZCloud"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise)
+    ]
+    @objc func get(_ call: CAPPluginCall) {
+        let store = NSUbiquitousKeyValueStore.default
+        store.synchronize()
+        if let v = store.string(forKey: call.getString("key") ?? "") { call.resolve(["value": v]) } else { call.resolve([:]) }
+    }
+    @objc func set(_ call: CAPPluginCall) {
+        guard let key = call.getString("key") else { call.reject("anahtar yok"); return }
+        let store = NSUbiquitousKeyValueStore.default
+        if let v = call.getString("value") { store.set(v, forKey: key) } else { store.removeObject(forKey: key) }
+        store.synchronize()
+        call.resolve()
+    }
+}
+
+class KZViewController: CAPBridgeViewController {
+    override open func capacitorDidLoad() {
+        bridge?.registerPluginInstance(KZCloudPlugin())
+    }
+}

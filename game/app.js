@@ -17,7 +17,18 @@ const WALLET = 'kafe-zinciri-cuzdan';
 function walletOf(S) { return { gold: S.gold || 0, patron: !!S.patron, fast: !!S.fast, akademi: !!S.akademi, noads: !!S.noads, skins: S.skins || {}, themes: S.themes || {}, locs: S.locs || {}, owned: Object.fromEntries(Object.entries(S.owned || {}).filter(([k]) => /^(patron|hizli|akademi|noads|starter|zincir|skin_|theme_|loc_)/.test(k))), firstDone: !!S.firstDone }; }
 function saveWallet() { try { if (st && st.iap) localStorage.setItem(WALLET, JSON.stringify(walletOf(st.iap))); } catch (e) {} }
 function carryWallet(ns) { try { const w = JSON.parse(localStorage.getItem(WALLET) || 'null'); if (!w) return; const S = K.iapState(ns); Object.assign(S, { gold: Math.max(S.gold, w.gold || 0), patron: w.patron, fast: w.fast, akademi: w.akademi, noads: w.noads, skins: w.skins || {}, themes: w.themes || {}, locs: w.locs || {}, firstDone: w.firstDone }); Object.assign(S.owned, w.owned || {}); } catch (e) {} }
-function save() { saveWallet(); try { if (st) st.savedAt = Date.now(); localStorage.setItem(SAVE, JSON.stringify(st)); ui.lastSave = Date.now(); } catch (e) {} }
+/* ---------- güvenilir saat ----------
+   Uygulamada saat internetten alınır (telefon saatini ileri almak işe yaramaz).
+   Bağlantı yoksa çevrimdışı ilerleme verilmez; tarayıcı sürümü cihaz saatini kullanır. */
+const TT = { base: null, perf: 0, ok: !window.KZ_NATIVE, syncing: null };
+function nowT() { return TT.base != null ? TT.base + (performance.now() - TT.perf) : Date.now(); }
+function syncTime() {
+  if (!window.KZ_NATIVE || !window.KZNetTime) { TT.ok = true; return Promise.resolve(true); }
+  if (TT.syncing) return TT.syncing;
+  return TT.syncing = window.KZNetTime().then(t => { TT.syncing = null; if (!t) { TT.ok = false; return false; } TT.base = t; TT.perf = performance.now(); TT.ok = true; return true; }, () => { TT.syncing = null; TT.ok = false; return false; });
+}
+K.setClock(nowT); syncTime();
+function save() { saveWallet(); try { if (st && TT.ok && !TT.syncing) st.savedAt = nowT(); localStorage.setItem(SAVE, JSON.stringify(st)); ui.lastSave = Date.now(); } catch (e) {} }
 function loadSave() { try { const s = localStorage.getItem(SAVE); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function clearSave() { try { localStorage.removeItem(SAVE); } catch (e) {} }
 
@@ -1116,6 +1127,23 @@ function migrate(st) {
 /* ---------- ayarlar ---------- */
 function prefs() { st.prefs = st.prefs || { report: true, coins: true, cashFull: false }; return st.prefs; }
 function sw(k, on, label) { return `<button class="switch ${on ? 'on' : ''}" role="switch" aria-checked="${on}" aria-label="${label}" data-a="pref" data-v="${k}"><i></i></button>`; }
+function backupTxt() {
+  const p = window.KZ_PLATFORM;
+  if (p === 'ios') return 'Kayıt ve Altın iCloud hesabına otomatik yedeklenir; uygulamayı silip yeniden yüklesen de aynı Apple Kimliği ile geri gelir.';
+  if (p === 'android') return 'Kayıt ve Altın Google hesabına otomatik yedeklenir (Android yedekleme açıksa, günde bir kez); yeniden yüklemede geri gelir.';
+  return 'Tarayıcı sürümünde kayıt yalnızca bu cihazda tutulur.';
+}
+const restoreRow = () => `<div class="shrest"><span>Daha önce satın aldıysan</span><button class="btn sm ghost" data-a="restore">Satın alımları geri yükle</button></div>`;
+// mağazadan gelen ürün listesine göre kalıcı ürünleri geri verir (tüketilen Altın/nakit paketleri geri gelmez)
+const RESTORABLE = { patron: { perm: 'patron' }, hizli: { perm: 'fast' }, akademi: { perm: 'akademi' }, noads: { noads: true } };
+function applyRestore(list, silent) {
+  if (!st) { ui.pendRestore = list; return; }
+  const S = K.iapState(st), got = [];
+  for (const id of list || []) { const g = RESTORABLE[id]; if (!g) continue; const key = g.perm || 'noads'; if (S[key]) continue; S[key] = true; S.owned[id] = Math.max(1, S.owned[id] || 0); got.push((K.IAP.find(x => x.id === id) || {}).n || id); }
+  if (got.length) { toast('Geri yüklendi: ' + got.join(', ')); sfx('coin'); save(); render(); }
+  else if (!silent) toast('Geri yüklenecek kalıcı ürün bulunamadı.');
+}
+window.addEventListener('kzrestore', e => applyRestore(e.detail.list, e.detail.silent));
 function settingsSheet() {
   const P = prefs(); const sp = st.speed;
   const sv = ui.lastSave || (st && st.savedAt); const saved = sv ? (new Date(sv).toDateString() === new Date().toDateString() ? 'bugün ' : new Date(sv).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' }) + ' ') + new Date(sv).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) + ' · oyun günü ' + (st.day + 1) : 'henüz yok';
@@ -1133,6 +1161,10 @@ function settingsSheet() {
         <div class="srow col"><div><b>Tema</b><small>Oyunun renkleri. Seçim bu cihazda saklanır.</small></div>${themePicker()}</div>
         <div class="srow"><div><b>Para gösterimi</b><small>Üst çubuktaki kasa tutarı</small></div><div class="seg"><button class="${P.cashFull ? '' : 'on'}" data-a="cashfmt" data-v="0">Kısa · 2 Mn ₺</button><button class="${P.cashFull ? 'on' : ''}" data-a="cashfmt" data-v="1">Tam</button></div></div>
         <div class="srow"><div><b>Kafe adı</b><small>Tabelada ve hesaplarda görünür</small></div><div class="row"><input type="text" id="rename" maxlength="24" value="${esc(st.name)}" aria-label="Kafe adı"><button class="btn sm" data-a="rename">Kaydet</button></div></div>
+      </section>
+      <section class="sgroup"><h4>Hesap ve yedek</h4>
+        <div class="srow"><div><b>Satın alımları geri yükle</b><small>Patron Kartı, Hızlı mod, Akademi ve Reklamsız ${window.KZ_PLATFORM === 'ios' ? 'Apple' : 'Google'} hesabından geri gelir</small></div><button class="btn sm" data-a="restore">Geri yükle</button></div>
+        <div class="srow"><div><b>Bulut yedeği</b><small>${backupTxt()}</small></div></div>
       </section>
       ${window.KZLog ? `<section class="sgroup"><h4>Geliştirici</h4>
         <div class="srow"><div><b>Sürüm</b><small>${esc(window.KZ_VERSION || 'tarayıcı')}${window.KZUpdate ? ' · yeni sürüm var: ' + esc(window.KZUpdate.version) : ''}</small></div><button class="btn sm" data-a="adtest">Reklamı dene</button></div>
@@ -1174,9 +1206,15 @@ function renderLayer() {
   layer.innerHTML = '';
 }
 function checkOffline() {
-  if (!st || ui.offline) return; const o = K.simulateAway(st, Date.now());
-  if (o) ui.offline = o;
-  st.savedAt = Date.now(); save();
+  if (!st || ui.offline) return;
+  syncTime().then(ok => {
+    if (!st || ui.offline) return;
+    if (!ok) { if (st.savedAt && !ui.noNetTold) { ui.noNetTold = true; toast('İnternet yok: oyun kapalıyken geçen süre bağlanınca hesaplanır'); } return; }
+    ui.noNetTold = false;
+    const o = K.simulateAway(st, nowT());
+    if (o) ui.offline = o;
+    st.savedAt = nowT(); save(); if (o) render();
+  });
 }
 function drainQuiet() {
   for (let i = 0; i < 6 && st && !st.crisis; i++) {
@@ -1196,8 +1234,8 @@ document.addEventListener('click', e => {
   if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
   if (a === 'rotateok') { ui.rotateOk = true; fit(); return; }
   if (a === 'brand') { ui.brand = brandOf(ui.brand); ui.brand[el.dataset.k] = v; const nm = $('#nm'); if (nm) ui.startName = nm.value; const sv = $('#nm') && $('#nm').selectionStart; render(); const n2 = $('#nm'); return; }
-  if (a === 'newgame') { const nm = $('#nm'); st = K.newGame({ name: (nm && nm.value) || 'Demli Kafe' }); st.brand = brandOf(ui.brand); carryWallet(st); ui.view = 'home'; ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; render(); save(); return; }
-  if (a === 'continue') { st = loadSave(); if (!st) return; migrate(st); st.paused = true; checkOffline(); if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return; }
+  if (a === 'newgame') { const nm = $('#nm'); st = K.newGame({ name: (nm && nm.value) || 'Demli Kafe' }); st.brand = brandOf(ui.brand); carryWallet(st); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } ui.view = 'home'; ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; render(); save(); return; }
+  if (a === 'continue') { st = loadSave(); if (!st) return; migrate(st); st.paused = true; checkOffline(); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return; }
   if (!st) return;
   const b = st.branches.find(x => x.id === ui.branch);
   switch (a) {
@@ -1278,6 +1316,7 @@ document.addEventListener('click', e => {
     case 'reset': ui.confirm = { k: 'reset' }; renderLayer(); return;
     case 'doreset': clearSave(); st = null; ui.confirm = null; ui.setup = null; ui.settings = false; render(); return;
     case 'evad': { const ev = K.nextEvent(st); const k = el.dataset.k; if (ev) runAd(k, null, () => K.resolveEvent(st, ev, +v)); return; }
+    case 'restore': { if (!window.KZIAP || !window.KZIAP.restore) { toast(window.KZ_NATIVE ? 'Mağaza bağlantısı henüz hazır değil, biraz sonra dene.' : 'Tarayıcı sürümünde satın alım yok.'); return; } toast('Mağaza kontrol ediliyor…'); window.KZIAP.restore(false).then(l => applyRestore(l, false), err => toast('Geri yükleme yapılamadı: ' + ((err && err.message) || 'bağlantı hatası'))); return; }
     case 'copylog': { const t = window.KZLog ? window.KZLog.text() : ''; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Günlük kopyalandı (' + window.KZLog.lines.length + ' satır).'), () => { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Günlük kopyalandı.'); } catch (e) { toast('Kopyalanamadı.'); } ta.remove(); }); return; }
     case 'adtest': { if (!window.KZAds) { toast('Reklam yalnızca uygulamada çalışır.'); return; } toast('Reklam yükleniyor…'); window.KZAds.showRewarded('test').then(ok => { toast(ok ? 'Reklam çalıştı.' : 'Reklam açılamadı: ' + (window.KZAds.lastError || 'bilinmeyen')); render(); }); return; }
     case 'updnow': { const u = window.KZUpdate; ui.upd = 'done'; if (u && u.open) u.open(); render(); return; }
@@ -1420,7 +1459,7 @@ function offerEnd(it) {
   return null;
 }
 function cdTxt(ms) { ms = Math.max(0, ms); const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4), s2 = Math.floor(ms % 6e4 / 1000); return (d ? d + 'g ' : '') + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s2).padStart(2, '0'); }
-function endChip(it) { const e = offerEnd(it); if (!e) return ''; return e.at ? `<span class="shend" data-cd="${e.at}">${I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')}<b>${cdTxt(e.at - Date.now())}</b></span>` : `<span class="shend">${I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')}<b>${e.txt}</b></span>`; }
+function endChip(it) { const e = offerEnd(it); if (!e) return ''; return e.at ? `<span class="shend" data-cd="${e.at}">${I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')}<b>${cdTxt(e.at - nowT())}</b></span>` : `<span class="shend">${I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')}<b>${e.txt}</b></span>`; }
 function tlCard(it, big) {
   const worth = it.worth ? `<s>${tl(it.worth)}</s>` : '';
   const pct = it.worth ? Math.round((1 - it.price / it.worth) * 100) : 0;
@@ -1462,7 +1501,7 @@ function shopSheet() {
     const gp = [K.GSHOP.find(x => x.id === 'loc_galata'), K.GSHOP.find(x => x.id === 'skin_neon')].filter(x => x && K.iapAvail(st, x));
     body = `<div class="sxg2 feat">${tlCard(hero, true)}<div class="sxg">${picks.map(x => tlCard(x)).join('')}${gp.map(gCard).join('')}</div></div>`;
   } else if (tab === 'Teklifler') body = offers.length ? `<div class="sxg">${offers.map(x => tlCard(x, true)).join('')}</div>` : `<p class="muted shempty">Şu an aktif teklif yok. Haftalık fırsat her pazartesi yenilenir.</p>`;
-  else if (tab === 'Kalıcı') body = `<div class="sxg">${K.IAP.filter(x => x.cat === 'Kalıcı').map(x => S.owned[x.id] ? `<div class="sx own"><span class="sxic">${I(SHOP_IC['Kalıcı'])}</span><b>${esc(x.n)}</b><small>${esc(x.d)}</small><span class="sxp"><em>Sende var</em></span></div>` : tlCard(x)).join('')}</div>`;
+  else if (tab === 'Kalıcı') body = `<div class="sxg">${K.IAP.filter(x => x.cat === 'Kalıcı').map(x => S.owned[x.id] ? `<div class="sx own"><span class="sxic">${I(SHOP_IC['Kalıcı'])}</span><b>${esc(x.n)}</b><small>${esc(x.d)}</small><span class="sxp"><em>Sende var</em></span></div>` : tlCard(x)).join('')}</div>${restoreRow()}`;
   else if (tab === 'Kasa') body = `<h5 class="shh5">Altın Çekirdek</h5><div class="sxg">${tlAv('Kasa').filter(x => x.give.gold).map(x => tlCard(x)).join('')}</div><h5 class="shh5">Nakit</h5><div class="sxg">${tlAv('Kasa').filter(x => x.give.cash).map(x => tlCard(x)).join('')}</div>`;
   else body = `<div class="sxg ${tab === 'Görünüm' || tab === 'Lokasyonlar' ? 'wide' : ''}">${gAv(tab).map(gCard).join('')}</div>`;
   const first = !S.firstDone ? `<div class="shfirst">${I(SHOP_IC.Teklifler)}<span><b>İlk alımına 2 kat!</b> İlk paketinde nakit ve Altın iki katı gelir.</span></div>` : '';
@@ -1544,7 +1583,8 @@ function loop(now) {
 
 /* ---------- başlat ---------- */
 window.addEventListener('kzupdate', () => { if (st) render(); });
-setInterval(() => { document.querySelectorAll('[data-cd]').forEach(e => { const b = e.querySelector('b'); if (b) b.textContent = cdTxt(+e.dataset.cd - Date.now()); }); }, 1000);
+setInterval(() => { document.querySelectorAll('[data-cd]').forEach(e => { const b = e.querySelector('b'); if (b) b.textContent = cdTxt(+e.dataset.cd - nowT()); }); }, 1000);
+window.addEventListener('online', () => { if (st) checkOffline(); });
 document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) save(); else { checkOffline(); render(); } });
 window.addEventListener('pagehide', () => { if (st) save(); });
 const saved = loadSave();

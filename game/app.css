@@ -1345,3 +1345,4 @@ html.lowfx .sheet, html.lowfx .card, html.lowfx .tile { box-shadow: none !import
 .shop2 .sxic svg, .shop2 .shtabs svg, .shop2 .shend svg, .shop2 .shloc svg, .shop2 .shfirst svg, .shop2 .spbig.loc svg, .shop2 .sti svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .shop2 .sx .shend b, .shop2 .sx.sxhero .shend b { font-size: 11.5px; font-weight: 600; }
 .shop2 .sx .shloc b { font-size: 15px; font-weight: 500; }
+.shrest{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:10px 12px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px}

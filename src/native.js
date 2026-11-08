@@ -23,6 +23,26 @@
   function boot() { try { window.__kzBoot && window.__kzBoot(); } finally { if (P.SplashScreen) P.SplashScreen.hide().catch(function () {}); } }
   if (!NATIVE) { boot(); return; }
   if (PLATFORM === 'android') document.documentElement.classList.add('lowfx');
+
+  /* Güvenilir saat: telefon saatine değil sunucu saatine bakılır (saat hilesine karşı) */
+  var TIME_URLS = ['https://www.google.com/generate_204', 'https://www.cloudflare.com/cdn-cgi/trace', 'https://www.apple.com/library/test/success.html'];
+  function oneTime(url) {
+    var H = P.CapacitorHttp, t0 = Date.now();
+    if (!H) return Promise.reject('CapacitorHttp yok');
+    return H.request({ url: url + (url.indexOf('?') < 0 ? '?' : '&') + 't=' + t0, method: 'GET', connectTimeout: 6000, readTimeout: 6000, headers: { 'Cache-Control': 'no-cache' } }).then(function (r) {
+      var rtt = Date.now() - t0, h = r.headers || {}, d = null;
+      Object.keys(h).forEach(function (k) { if (k.toLowerCase() === 'date') d = h[k]; });
+      var ms = d ? Date.parse(d) : NaN;
+      if (isNaN(ms) && typeof r.data === 'string') { var m = /ts=(\d+(\.\d+)?)/.exec(r.data); if (m) ms = parseFloat(m[1]) * 1000; }
+      if (isNaN(ms)) throw 'saat bilgisi yok';
+      return ms + rtt / 2;
+    });
+  }
+  window.KZNetTime = function () {
+    var i = 0;
+    function next() { if (i >= TIME_URLS.length) return null; var u = TIME_URLS[i++]; return oneTime(u).then(function (t) { LOG.add('INFO', 'saat alındı (' + u.split('/')[2] + ') fark ' + Math.round((t - Date.now()) / 1000) + ' sn'); return t; }, function (e) { LOG.add('INFO', 'saat alınamadı ' + u.split('/')[2] + ': ' + fmtErr(e)); return next(); }); }
+    return Promise.resolve(next());
+  };
   var INFO = null;
   var infoP = (P.App && P.App.getInfo ? P.App.getInfo() : Promise.reject()).then(function (i) { INFO = i; window.KZ_VERSION = i.version + ' (' + i.build + ')'; LOG.add('INFO', 'sürüm ' + window.KZ_VERSION + ' ' + i.id); return i; }, function () { return null; });
 
@@ -53,10 +73,15 @@
   var pending = {}, timer = null;
   function flush() { timer = null; var q = pending; pending = {}; Object.keys(q).forEach(function (k) {
       if (q[k] === null) Pref.remove({ key: k }).catch(function () {}); else Pref.set({ key: k, value: q[k] }).catch(function () {}); }); }
-  function queue(k, v) { pending[k] = v; if (!timer) timer = setTimeout(flush, 400); }
+  /* iCloud yedeği (iOS): kayıt ve cüzdan iCloud'a da yazılır. Android'de Google Yedekleme aynı işi yapar. */
+  var Cloud = (PLATFORM === 'ios' && C.registerPlugin) ? C.registerPlugin('KZCloud') : null;
+  var CLOUD_KEYS = { 'kafe-zinciri-v1': 1, 'kafe-zinciri-cuzdan': 1 }, cloudQ = {}, cloudT = null;
+  function cloudFlush() { cloudT = null; var q = cloudQ; cloudQ = {}; Object.keys(q).forEach(function (k) { Cloud.set(q[k] === null ? { key: k } : { key: k, value: q[k] }).catch(function (e) { LOG.add('INFO', 'iCloud yazılamadı: ' + fmtErr(e)); }); }); }
+  function cloudQueue(k, v) { if (!Cloud || !CLOUD_KEYS[k]) return; cloudQ[k] = v; if (!cloudT) cloudT = setTimeout(cloudFlush, 5000); }
+  function queue(k, v) { pending[k] = v; cloudQueue(k, v); if (!timer) timer = setTimeout(flush, 400); }
   Storage.prototype.setItem = function (k, v) { origSet(k, v); if (this === ls && String(k).indexOf(PREFIX) === 0) queue(String(k), String(v)); };
   Storage.prototype.removeItem = function (k) { origRemove(k); if (this === ls && String(k).indexOf(PREFIX) === 0) queue(String(k), null); };
-  if (P.App) P.App.addListener('pause', function () { if (timer) { clearTimeout(timer); flush(); } });
+  if (P.App) P.App.addListener('pause', function () { if (timer) { clearTimeout(timer); flush(); } if (cloudT) { clearTimeout(cloudT); cloudFlush(); } });
   document.addEventListener('visibilitychange', function () { if (document.hidden && timer) { clearTimeout(timer); flush(); } });
 
   function restore() {
@@ -68,6 +93,15 @@
           // iki kayıt varsa daha yeni olanı tut
           if (cur && k === 'kafe-zinciri-v1') { try { if ((JSON.parse(cur).savedAt || 0) > (JSON.parse(g.value).savedAt || 0)) { queue(k, cur); return; } } catch (e) {} }
           origSet(k, g.value); } }); }));
+    }).then(function () {
+      if (!Cloud) return;
+      // iCloud'daki kayıt daha yeniyse (ya da cihazda hiç yoksa) onu kullan
+      return Promise.all(Object.keys(CLOUD_KEYS).map(function (k) { return Cloud.get({ key: k }).then(function (g) {
+        if (!g || g.value == null) return; var cur = null; try { cur = ls.getItem(k); } catch (e) {}
+        var take = !cur;
+        if (cur && k === 'kafe-zinciri-v1') { try { take = (JSON.parse(g.value).savedAt || 0) > (JSON.parse(cur).savedAt || 0) + 60000; } catch (e) {} }
+        if (take) { origSet(k, g.value); LOG.add('INFO', 'iCloud yedeğinden geri yüklendi: ' + k); }
+      }); })).catch(function (e) { LOG.add('INFO', 'iCloud okunamadı: ' + fmtErr(e)); });
     }).then(function () {
       // ilk açılış: eski localStorage kaydını Preferences'a taşı
       for (var i = 0; i < ls.length; i++) { var k = ls.key(i); if (k && k.indexOf(PREFIX) === 0) queue(k, ls.getItem(k)); }
@@ -131,8 +165,20 @@
             return P.Purchases.purchaseStoreProduct({ product: prod });
           }).then(function () { return true; }, function (e) { if (!(e && (e.userCancelled || e.code === '1'))) console.warn('IAP', e); return false; });
         },
-        prices: {}
+        prices: {},
+        // kalıcı ürünleri (Patron Kartı, Hızlı mod, Akademi, Reklamsız) mağazadan geri getirir
+        restore: function (silent) {
+          return (silent ? P.Purchases.getCustomerInfo() : P.Purchases.restorePurchases()).then(function (r) {
+            var ci = (r && r.customerInfo) || {}, set = {};
+            (ci.allPurchasedProductIdentifiers || []).forEach(function (x) { set[x] = 1; });
+            (ci.nonSubscriptionTransactions || []).forEach(function (t) { set[t.productIdentifier] = 1; });
+            var out = Object.keys(set).map(function (x) { return x.replace(CFG.skuPrefix || '', '').split(':')[0]; });
+            LOG.add('INFO', 'geri yükleme: ' + (out.join(',') || 'ürün yok'));
+            return out;
+          });
+        }
       };
+      window.KZIAP.restore(true).then(function (l) { try { window.dispatchEvent(new CustomEvent('kzrestore', { detail: { list: l, silent: true } })); } catch (e) {} }, function () {});
       // mağazadaki yerel fiyatları oyundaki mağaza ekranına aktar
       var ids = ['starter','melek','zincir','bayram','haftalik_a','haftalik_b','haftalik_c','patron','hizli','akademi','noads','gold_s','gold_m','gold_l','cash_s','cash_m','cash_l'];
       return P.Purchases.getProducts({ productIdentifiers: ids.map(function (x) { return (CFG.skuPrefix || '') + x; }), type: 'NON_SUBSCRIPTION' }).then(function (r) {

@@ -44,6 +44,6 @@ Kendi kahveni demle, ilk dükkanını aç ve zincirini Türkiye'ye yay.
 
 ## Görseller
 
-- `ios/` — 2868×1320 (iPhone 6.9", yatay), 5 adet
-- `android/` — 1920×1080 başlıklı ekran görüntüleri, 5 adet + `android_feature_1024x500.png` (öne çıkan görsel)
+- `ios/` — 2868×1320 (iPhone 6.9", yatay), 6 adet
+- `android/` — 1920×1080 başlıklı ekran görüntüleri, 6 adet + `android_feature_1024x500.png` (öne çıkan görsel)
 - `icon-1024.png` — mağaza ikonu (Play için 512×512'ye küçültülür)
