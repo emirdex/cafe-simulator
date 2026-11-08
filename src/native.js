@@ -134,7 +134,7 @@
         prices: {}
       };
       // mağazadaki yerel fiyatları oyundaki mağaza ekranına aktar
-      var ids = ['starter','cash_s','cash_m','cash_l','rep_s','rep_l','fol','tickets','moral','score','noads'];
+      var ids = ['starter','melek','zincir','bayram','haftalik_a','haftalik_b','haftalik_c','patron','hizli','akademi','noads','gold_s','gold_m','gold_l','cash_s','cash_m','cash_l'];
       return P.Purchases.getProducts({ productIdentifiers: ids.map(function (x) { return (CFG.skuPrefix || '') + x; }), type: 'NON_SUBSCRIPTION' }).then(function (r) {
         (r.products || []).forEach(function (p) { var k = p.identifier.replace(CFG.skuPrefix || '', ''); window.KZIAP.prices[k] = p.priceString; });
       }).catch(function () {});

@@ -12,7 +12,12 @@ const ui = { view: 'home', sel: null, type: 'kafe', setup: null, branch: null, b
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function save() { try { if (st) st.savedAt = Date.now(); localStorage.setItem(SAVE, JSON.stringify(st)); ui.lastSave = Date.now(); } catch (e) {} }
+// Hesap cüzdanı: kalıcı satın almalar, Altın ve açılan görünümler kayıttan bağımsız saklanır; yeni oyunda kaybolmaz.
+const WALLET = 'kafe-zinciri-cuzdan';
+function walletOf(S) { return { gold: S.gold || 0, patron: !!S.patron, fast: !!S.fast, akademi: !!S.akademi, noads: !!S.noads, skins: S.skins || {}, themes: S.themes || {}, locs: S.locs || {}, owned: Object.fromEntries(Object.entries(S.owned || {}).filter(([k]) => /^(patron|hizli|akademi|noads|starter|zincir|skin_|theme_|loc_)/.test(k))), firstDone: !!S.firstDone }; }
+function saveWallet() { try { if (st && st.iap) localStorage.setItem(WALLET, JSON.stringify(walletOf(st.iap))); } catch (e) {} }
+function carryWallet(ns) { try { const w = JSON.parse(localStorage.getItem(WALLET) || 'null'); if (!w) return; const S = K.iapState(ns); Object.assign(S, { gold: Math.max(S.gold, w.gold || 0), patron: w.patron, fast: w.fast, akademi: w.akademi, noads: w.noads, skins: w.skins || {}, themes: w.themes || {}, locs: w.locs || {}, firstDone: w.firstDone }); Object.assign(S.owned, w.owned || {}); } catch (e) {} }
+function save() { saveWallet(); try { if (st) st.savedAt = Date.now(); localStorage.setItem(SAVE, JSON.stringify(st)); ui.lastSave = Date.now(); } catch (e) {} }
 function loadSave() { try { const s = localStorage.getItem(SAVE); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function clearSave() { try { localStorage.removeItem(SAVE); } catch (e) {} }
 
@@ -70,8 +75,14 @@ const BRAND_COLORS = {
   terra:  { n: 'Terracotta', paint: '#5a2e1e', awn: '#a8542f', sign: ['#fff2dc', '#f7d9a8', '#d9a86a'], sw: '#b5603a' },
   krem:   { n: 'Krem',      paint: '#e9dfcb', awn: '#2f2a24', sign: ['#3a2c1e', '#2a1f15', '#1a120b'], sw: '#e9dfcb', light: true },
   siyah:  { n: 'Siyah',     paint: '#141414', awn: '#262626', sign: ['#ffffff', '#e8e8e8', '#bdbdbd'], sw: '#1b1b1b' },
-  mint:   { n: 'Mint',      paint: '#2f6b5c', awn: '#e8e1cf', sign: ['#ffffff', '#f3efe4', '#d9d2c0'], sw: '#3e8c78' }
+  mint:   { n: 'Mint',      paint: '#2f6b5c', awn: '#e8e1cf', sign: ['#ffffff', '#f3efe4', '#d9d2c0'], sw: '#3e8c78' },
+  // mağazadan alınan cepheler
+  ahsap:  { n: 'Ahşap bistro', paint: '#5b3a22', awn: '#8a5a32', sign: ['#fff2d6', '#f2d29c', '#c99a5a'], sw: '#7a4e2c', premium: true, deco: 'ahsap' },
+  neon:   { n: 'Neon gece', paint: '#120c1c', awn: '#ff4f9a', sign: ['#ffd1ea', '#ff7cc0', '#ff3f98'], sw: '#ff4f9a', premium: true, deco: 'neon' },
+  mermer: { n: 'Mermer lüks', paint: '#e9e5dd', awn: '#1d1d1f', sign: ['#f6e3a8', '#d4b26a', '#9a7432'], sw: '#e9e5dd', light: true, premium: true, deco: 'mermer' },
+  nostalji: { n: 'Nostaljik Beyoğlu', paint: '#6e1c1c', awn: '#efe4cc', sign: ['#fff4dc', '#ecd3a0', '#c49a52'], sw: '#8a2424', premium: true, deco: 'nostalji' }
 };
+function brandAllowed(k) { const c = BRAND_COLORS[k]; return !!c && (!c.premium || !!(st && st.iap && st.iap.skins && st.iap.skins[k])); }
 const BRAND_FONTS = { klasik: { n: 'Klasik', f: "'Fraunces', Georgia, serif" }, modern: { n: 'Modern', f: "'Plus Jakarta Sans', system-ui, sans-serif" }, el: { n: 'El yazısı', f: "'Caveat', 'Segoe Script', cursive" } };
 const BRAND_ICONS = {
   fincan: '<path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M16 10.5h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M8 3.5c0 1.3 1 1.3 1 2.6M12 3.5c0 1.3 1 1.3 1 2.6"/>',
@@ -140,6 +151,13 @@ function renovFacade(o) {
   <rect x="0" y="290" width="600" height="30" fill="#232327"/>${Array.from({ length: 8 }, (_, i) => `<rect x="${20 + i * 80}" y="303" width="40" height="3" fill="#cfcfcf" opacity=".5"/>`).join('')}
 </svg>`;
 }
+function skinDeco(k) {
+  if (k === 'ahsap') return Array.from({ length: 27 }, (_, i) => `<rect x="${110 + i * 14.3}" y="116" width="1.2" height="148" fill="#3e2615" opacity=".45"/>`).join('');
+  if (k === 'mermer') return '<path d="M120 130 q40 20 80 6 t90 18 M260 200 q50 -18 110 4 t110 -10 M130 240 q60 -10 120 8" fill="none" stroke="#b9b2a4" stroke-width="1.4" opacity=".7"/>';
+  if (k === 'neon') return '<rect x="110" y="118" width="380" height="144" fill="none" stroke="#ff4f9a" stroke-width="2.4" opacity=".9"/><rect x="110" y="118" width="380" height="144" fill="none" stroke="#ff9ccb" stroke-width="8" opacity=".18"/><rect x="116" y="124" width="368" height="132" fill="none" stroke="#5fe1ff" stroke-width="1.2" opacity=".7"/>';
+  if (k === 'nostalji') return '<rect x="110" y="118" width="380" height="144" fill="none" stroke="#d9b56a" stroke-width="2" opacity=".85"/><rect x="116" y="124" width="368" height="132" fill="none" stroke="#d9b56a" stroke-width=".8" opacity=".6"/><g fill="#d9b56a"><circle cx="118" cy="126" r="3"/><circle cx="482" cy="126" r="3"/></g>';
+  return '';
+}
 function facade(o) {
   const night = o.night, open = o.open, occ = Math.max(0, Math.min(1, o.occ || 0)), id = o.id || 'f';
   const sg = signFit(o.name);
@@ -188,7 +206,7 @@ function facade(o) {
   <rect x="96" y="8" width="408" height="4" fill="${wall2}"/>
   ${upper}
   <rect x="90" y="100" width="420" height="10" fill="${wall2}"/><rect x="90" y="110" width="420" height="3" fill="#000" opacity=".2"/>
-  <rect x="108" y="116" width="384" height="148" fill="${paint}"/>
+  <rect x="108" y="116" width="384" height="148" fill="${paint}"/>${skinDeco(BC.deco)}
   <rect x="108" y="116" width="384" height="148" fill="none" stroke="#c9a45c" stroke-width=".8" opacity=".55"/>
   <rect x="148" y="122" width="304" height="30" rx="2" fill="${BC.light ? '#f6f0e3' : '#0b0f0e'}" stroke="url(#${id}gold)" stroke-width="1.4"/>
   <rect x="152" y="126" width="296" height="22" rx="1" fill="none" stroke="${BC.sign[1]}" stroke-width=".4" opacity=".6"/>
@@ -395,7 +413,7 @@ function render() {
   const v = scr.querySelector('.view'); if (v && ui._keepScroll) v.scrollTop = scroll;
   const sd = scr.querySelector('.side'); if (sd && ui._keepScroll) sd.scrollTop = sideScroll;
   ui._keepScroll = false;
-  const _nb = scr.querySelector('#toasts'); if (_nb) _keepT.forEach(t => _nb.appendChild(t));
+  const _nb = scr.querySelector('#toasts'); if (_nb) _keepT.forEach(t => { t.classList.add('kept'); _nb.appendChild(t); });
   renderLayer(); drainNotes();
 }
 // kaydırma/dokunma sırasında ekranı baştan çizme: sadece üst çubuk güncellenir, tam çizim sonra yapılır
@@ -433,7 +451,7 @@ function hud() {
     <div class="hpill rep" title="Marka itibarı"><span class="star">${I('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>')}</span><b class="num">${rep}</b></div>
     <div class="hspeed" role="group" aria-label="Oyun hızı">
       <button class="${sp === 0 ? 'on' : ''}" data-a="speed" data-v="0" aria-label="Duraklat">${I('<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>')}</button>
-      <button class="${sp ? 'on' : ''}" data-a="speed" data-v="1" aria-label="Oynat">${I('<path d="M8 5l11 7-11 7z"/>')}</button>
+      <button class="${sp && !(st.speed === 2 && st.iap && st.iap.fast) ? 'on' : ''}" data-a="speed" data-v="1" aria-label="Oynat">${I('<path d="M8 5l11 7-11 7z"/>')}</button>${st.iap && st.iap.fast ? `<button class="${sp && st.speed === 2 ? 'on' : ''}" data-a="speed" data-v="2" aria-label="2 kat hız">${I('<path d="M4 5l8 7-8 7zM12 5l8 7-8 7z"/>')}</button>` : ''}
     </div>
     ${monetOn() ? '' : '<!--'}<button class="ibtn shopb2" data-a="shop" aria-label="Mağaza">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</button>${monetOn() ? '' : '-->'}
     <button class="ibtn" data-a="settings" aria-label="Ayarlar">${IC.gear}</button>
@@ -459,7 +477,7 @@ function startView() {
       <h1>Tabelanı tasarla</h1>
       <label class="fl" for="nm">Kafenin adı</label>
       <input type="text" id="nm" maxlength="24" value="${esc(ui.startName)}" autocomplete="off" spellcheck="false">
-      <div class="bgrp"><span class="fl">Marka rengi <b>${BRAND_COLORS[B.color].n}</b></span><div class="swatches">${Object.entries(BRAND_COLORS).map(([k, c]) => `<button class="swt ${B.color === k ? 'on' : ''}" data-a="brand" data-k="color" data-v="${k}" aria-label="${c.n}" style="--sw:${c.sw};--sg:${c.sign[1]}"><i></i></button>`).join('')}</div></div>
+      <div class="bgrp"><span class="fl">Marka rengi <b>${BRAND_COLORS[B.color].n}</b></span><div class="swatches">${Object.entries(BRAND_COLORS).filter(([k, c]) => !c.premium).map(([k, c]) => `<button class="swt ${B.color === k ? 'on' : ''}" data-a="brand" data-k="color" data-v="${k}" aria-label="${c.n}" style="--sw:${c.sw};--sg:${c.sign[1]}"><i></i></button>`).join('')}</div></div>
       <div class="bgrp"><span class="fl">Logo</span><div class="icons">${Object.entries(BRAND_ICONS).map(([k, path]) => `<button class="ico ${B.icon === k ? 'on' : ''}" data-a="brand" data-k="icon" data-v="${k}" aria-label="${k}"><svg viewBox="0 0 24 24">${path}</svg></button>`).join('')}</div></div>
       <div class="bgrp"><span class="fl">Tabela yazısı</span><div class="fonts">${Object.entries(BRAND_FONTS).map(([k, f]) => `<button class="fnt ${B.font === k ? 'on' : ''}" data-a="brand" data-k="font" data-v="${k}" style="font-family:${f.f}">${f.n}</button>`).join('')}</div></div>
       <button class="gold go3" data-a="newgame">Dükkanı aç ${IC.next}</button>
@@ -1111,6 +1129,7 @@ function settingsSheet() {
         <div class="srow"><div><b>Kasa baloncukları</b><small>Ana ekranda kazanılan tutarları göster</small></div>${sw('coins', P.coins, 'Kasa baloncukları')}</div>
       </section>
       <section class="sgroup"><h4>Görünüm</h4>
+        <div class="srow col"><div><b>Dükkan cephesi</b><small>Tüm şubelerin rengi ve tabelası. Özel cepheler mağazada.</small></div><div class="swatches">${Object.entries(BRAND_COLORS).map(([k, c]) => brandAllowed(k) ? `<button class="swt ${curBrand().color === k ? 'on' : ''}" data-a="setbrand" data-v="${k}" aria-label="${c.n}" title="${c.n}" style="--sw:${c.sw};--sg:${c.sign[1]}"><i></i></button>` : `<button class="swt lock" data-a="shoptab" data-v="Görünüm" aria-label="${c.n} · mağazada" title="${c.n} · mağazada" style="--sw:${c.sw};--sg:${c.sign[1]}"><i></i></button>`).join('')}</div></div>
         <div class="srow col"><div><b>Tema</b><small>Oyunun renkleri. Seçim bu cihazda saklanır.</small></div>${themePicker()}</div>
         <div class="srow"><div><b>Para gösterimi</b><small>Üst çubuktaki kasa tutarı</small></div><div class="seg"><button class="${P.cashFull ? '' : 'on'}" data-a="cashfmt" data-v="0">Kısa · 2 Mn ₺</button><button class="${P.cashFull ? 'on' : ''}" data-a="cashfmt" data-v="1">Tam</button></div></div>
         <div class="srow"><div><b>Kafe adı</b><small>Tabelada ve hesaplarda görünür</small></div><div class="row"><input type="text" id="rename" maxlength="24" value="${esc(st.name)}" aria-label="Kafe adı"><button class="btn sm" data-a="rename">Kaydet</button></div></div>
@@ -1177,7 +1196,7 @@ document.addEventListener('click', e => {
   if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
   if (a === 'rotateok') { ui.rotateOk = true; fit(); return; }
   if (a === 'brand') { ui.brand = brandOf(ui.brand); ui.brand[el.dataset.k] = v; const nm = $('#nm'); if (nm) ui.startName = nm.value; const sv = $('#nm') && $('#nm').selectionStart; render(); const n2 = $('#nm'); return; }
-  if (a === 'newgame') { const nm = $('#nm'); st = K.newGame({ name: (nm && nm.value) || 'Demli Kafe' }); st.brand = brandOf(ui.brand); ui.view = 'home'; ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; render(); save(); return; }
+  if (a === 'newgame') { const nm = $('#nm'); st = K.newGame({ name: (nm && nm.value) || 'Demli Kafe' }); st.brand = brandOf(ui.brand); carryWallet(st); ui.view = 'home'; ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; render(); save(); return; }
   if (a === 'continue') { st = loadSave(); if (!st) return; migrate(st); st.paused = true; checkOffline(); if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return; }
   if (!st) return;
   const b = st.branches.find(x => x.id === ui.branch);
@@ -1186,7 +1205,7 @@ document.addEventListener('click', e => {
     case 'gomap': ui.view = 'map'; ui.type = 'kafe'; if (v) { ui.sel = v; ui.prov = DISTRICTS[v].p; ui.mapLevel = 'prov'; const pv = provView(ui.prov); setMV({ x: pv[0] - pv[2] / 2, y: pv[1] - pv[2] * dims().h / dims().w / 2, w: pv[2] }); } else { ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; setMV(Object.assign({}, MVDEF.tr)); } break;
     case 'prov': { if (ui._dragged) { ui._dragged = false; return; } ui.sel = null; ui.mall = null; ui.mallGroup = null; if (!v) { ui.prov = null; flyTo('tr', TRV[0] + TRV[2] / 2, TRV[1] + TRV[3] / 2, TRV[2]); return; } ui.prov = v; const pv = provView(v); flyTo('prov', pv[0], pv[1], pv[2]); return; }
     case 'level': ui.sel = null; ui.prov = null; ui.mall = null; ui.mallGroup = null; flyTo('tr', TRV[0] + TRV[2] / 2, TRV[1] + TRV[3] / 2, TRV[2]); return;
-    case 'speed': if (+v === 0) st.paused = true; else { st.paused = false; st.speed = 1; } break;
+    case 'speed': if (+v === 0) st.paused = true; else { st.paused = false; st.speed = +v === 2 && st.iap && st.iap.fast ? 2 : 1; } break;
     case 'settings': ui.settings = true; break;
     case 'closesettings': ui.settings = false; ui.confirm = null; break;
     case 'pref': { const P = prefs(); P[v] = !P[v]; save(); renderLayer(); return; }
@@ -1213,10 +1232,16 @@ document.addEventListener('click', e => {
     case 'staff': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value; ui.setup.ch.staff = Math.max(1, Math.min(40, ui.setup.ch.staff + +v)); renderLayer(); return; }
     case 'loanopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const lo = bestLoan(cost - st.cash); if (!lo.o) { toast(lo.why); break; } K.addLoan(st, lo.o.id, lo.amt, lo.q.r, lo.o.n_); const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(fmt(lo.amt) + ' kredi çekildi. ' + r.b.name + (r.b.status === 'acik' ? ' açıldı.' : ' kiralandı.')); sfx('bell'); save(); } else toast(r.msg); break; }
     case 'compare': ui.cmp = true; renderLayer(); return;
-    case 'shop': ui.shop = true; renderLayer(); return;
+    case 'shop': ui.shop = true; ui.shopPrev = null; renderLayer(); return;
+    case 'setbrand': { if (brandAllowed(v)) { st.brand = Object.assign({}, st.brand || {}, { color: v }); save(); } renderLayer(); return; }
+    case 'shoptab': { ui.settings = false; ui.shop = true; ui.shopTab = v; ui.shopPrev = null; renderLayer(); return; }
     case 'settheme': { try { localStorage.setItem(THEME_KEY, v); } catch (e) {} applyTheme(v); renderLayer(); return; }
     case 'closeshop': ui.shop = false; render(); return;
     case 'buy': { const it = K.IAP.find(x => x.id === v); if (!it) return; buyMock(it).then(ok => { if (!ok) return; const r = K.iapGive(st, v); toast(r.msg); sfx('coin'); save(); render(); }); return; }
+    case 'gbuy': { const r = K.goldBuy(st, v); if (!r.ok) { toast(r.msg); if (r.need) { ui.shopTab = 'Kasa'; ui.shopPrev = null; } render(); return; } toast(r.msg); sfx('coin'); ui.shopPrev = null; const it = K.GSHOP.find(x => x.id === v); if (it && it.give.theme) { try { localStorage.setItem(THEME_KEY, it.give.theme); } catch (e) {} applyTheme(it.give.theme); } save(); render(); return; }
+    case 'sprev': ui.shopPrev = v; renderLayer(); return;
+    case 'sprevx': ui.shopPrev = null; renderLayer(); return;
+    case 'noop': return;
     case 'ticket': { const r = K.useTicket(st, +v); toast(r.msg); save(); break; }
     case 'closecmp': ui.cmp = false; render(); return;
     case 'rentcmp': { ui.cmp = false; const L = curListings().find(x => x.id === v); if (L) { ui.setup = { L, ch: K.defaultChoice(st, L) }; ui.setup.ch.name = DISTRICTS[L.did].n; } render(); return; }
@@ -1336,10 +1361,15 @@ const THEMES = {
   t06: { n: 'Petrol & Mercan', k: 'Koyu', c: ["#0a1719", "#10232a", "#163038", "#20414a", "#e6f2f3", "#8fadb2", "#f08a6c", "#3a2219", "#1f0c06", "#071113", "#14303a", "#050c0e"], light: 0 },
   t03: { n: 'Grafit & Bakır', k: 'Koyu', c: ["#121314", "#1b1d1f", "#232528", "#30333a", "#eeeeee", "#a0a4ab", "#d08a5a", "#33241a", "#1a0f08", "#0d0e0f", "#25282c", "#0b0c0d"], light: 0 },
   t01: { n: 'Espresso & Krem', k: 'Koyu', c: ["#17110d", "#211913", "#2a2019", "#3a2d23", "#f3e9dd", "#b7a594", "#d9a066", "#3a2a1c", "#1a1008", "#120d0a", "#2c221a", "#0f0b08"], light: 0 },
+  t02: { n: 'Zümrüt Gece', k: 'Koyu', premium: true, c: ['#0b1714','#11211c','#172b25','#21392f','#e8f2ee','#93ada3','#c9a86a','#2b2a1c','#14110a','#08120f','#173028','#071010'], light: 0 },
+  t05: { n: 'Mürdüm & Gül', k: 'Koyu', premium: true, c: ['#140f1c','#1d1628','#251c33','#352a48','#f1ebf7','#a79bb8','#e79ab8','#3a2230','#1e0d16','#0e0a14','#261d36','#0a0710'], light: 0 },
+  t07: { n: 'Gece Neon', k: 'Koyu', premium: true, c: ['#0b0b14','#14142a','#1b1b38','#2a2a50','#eef0ff','#9a9cc4','#7cf0d0','#163a35','#04140f','#07070f','#1b1b3a','#05050c'], light: 0 },
+  t15: { n: 'Mermer & Altın', k: 'Açık', premium: true, c: ['#f2f1ee','#ffffff','#f6f5f2','#e1ded7','#1c1c1e','#77746c','#b08a3e','#f1e7d1','#ffffff','#dedcd6','#f0efea','#c7c3b8'], light: 1 },
   t13: { n: 'Nordik Buz', k: 'Açık', c: ["#edf2f6", "#ffffff", "#f3f7fa", "#d8e2ea", "#18222e", "#66768a", "#2f7fb5", "#dbeaf5", "#ffffff", "#d3e1ec", "#eef3f7", "#b3c5d4"], light: 1 }
 };
 const THEME_KEY = 'kafe-zinciri-tema';
-function themeId() { try { const v = localStorage.getItem(THEME_KEY); if (v && THEMES[v]) return v; } catch (e) {} return 't08'; }
+function themeOwned(id) { const t = THEMES[id]; return !!t && (!t.premium || !!(st && st.iap && st.iap.themes && st.iap.themes[id])); }
+function themeId() { try { const v = localStorage.getItem(THEME_KEY); if (v && THEMES[v] && (!THEMES[v].premium || !st || themeOwned(v))) return v; } catch (e) {} return 't08'; }
 function themeCSS(id, start) {
   let [bg, p, p2, ln, ink, mu, ac, acs, on, sea, prv, pst] = THEMES[id].c, light = THEMES[id].light;
   if (start && light) { const D = THEMES.t08.c; [bg, p, p2, ln, ink, mu] = D; acs = '#1f2b38'; light = 0; } // açılış ekranı her zaman koyu
@@ -1363,19 +1393,85 @@ function themeCSS(id, start) {
 function applyTheme(id) { let e = document.getElementById('kz-theme'); if (!e) { e = document.createElement('style'); e.id = 'kz-theme'; document.body.appendChild(e); } const k = id + (st ? '' : ':s'); if (e.dataset.k === k) return; e.dataset.k = k; e.textContent = themeCSS(id, !st); }
 function themePicker() {
   const cur = themeId();
-  return `<div class="thgrid">${Object.entries(THEMES).map(([id, t]) => { const c = t.c; return `<button class="thc ${cur === id ? 'on' : ''}" data-a="settheme" data-v="${id}" aria-pressed="${cur === id}" style="--tb:${c[0]};--tp:${c[1]};--tl:${c[3]};--ti:${c[4]};--ta:${c[6]}"><span class="thprev"><i class="tbar"></i><i class="tcard"></i><i class="tcard2"></i><i class="tbtn"></i></span><b>${t.n}</b><small>${t.k}${id === 't08' ? ' · varsayılan' : ''}</small></button>`; }).join('')}</div>`;
+  return `<div class="thgrid">${Object.entries(THEMES).map(([id, t]) => { const c = t.c; return `<button class="thc ${cur === id ? 'on' : ''}" data-a="${themeOwned(id) ? 'settheme' : 'shoptab'}" data-v="${themeOwned(id) ? id : 'Görünüm'}" aria-pressed="${cur === id}" style="--tb:${c[0]};--tp:${c[1]};--tl:${c[3]};--ti:${c[4]};--ta:${c[6]}">${themeOwned(id) ? '' : '<span class="thlock">80 Altın</span>'}<span class="thprev"><i class="tbar"></i><i class="tcard"></i><i class="tcard2"></i><i class="tbtn"></i></span><b>${t.n}</b><small>${t.k}${id === 't08' ? ' · varsayılan' : ''}</small></button>`; }).join('')}</div>`;
 }
 
 /* ---------- mağaza (oyun içi satın alma) ---------- */
 // Mobil sürümde window.KZIAP.purchase(sku) App Store / Google Play ödemesini yapıp Promise<boolean> döndürür.
-const SHOP_IC = { Teklif: '<path d="M20 12v8H4v-8M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7z"/>', Kasa: '<circle cx="12" cy="12" r="8"/><path d="M9.5 9h4a2 2 0 0 1 0 4h-3a2 2 0 0 0 0 4h4M12 7v2M12 17v1"/>', 'İtibar': '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>', 'Hız': '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', Premium: '<path d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/>' };
+const SHOP_TABS = ['Öne çıkan', 'Teklifler', 'Kalıcı', 'Lokasyonlar', 'Görünüm', 'Hız', 'Kasa'];
+const SHOP_IC = {
+  'Öne çıkan': '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+  Teklifler: '<path d="M20 12v8H4v-8M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 1 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 1 0 0-5C13 2 12 7 12 7z"/>',
+  'Kalıcı': '<path d="M3 8l4 4 5-7 5 7 4-4-2 11H5z"/>',
+  Lokasyonlar: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  'Görünüm': '<path d="M3 10l1.5-5h15L21 10"/><path d="M4 10v10h16V10"/><path d="M3 10h18"/><path d="M10 20v-5h4v5"/>',
+  'Hız': '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  Kasa: '<circle cx="12" cy="12" r="8"/><path d="M9.5 9h4a2 2 0 0 1 0 4h-3a2 2 0 0 0 0 4h4M12 7v2M12 17v1"/>'
+};
+const GOLD_I = '<svg class="gi" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="12" rx="7" ry="9.5" transform="rotate(-25 12 12)" fill="currentColor"/><path d="M9 4.5c3 4.5-1.5 9 3 15" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="1.6" stroke-linecap="round" transform="rotate(-25 12 12)"/></svg>';
 const tl = v => v.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
+const priceOf = it => (window.KZIAP && KZIAP.prices && KZIAP.prices[it.id]) || tl(it.price);
+function offerEnd(it) {
+  if (it.week != null) return { at: K.weekEnds() };
+  if (it.until) return { txt: Math.max(0, it.until - st.day) + ' oyun günü kaldı' };
+  if (it.id === 'bayram') return { txt: 'Bayram boyunca' };
+  if (it.id === 'melek') return { txt: 'Durum düzelince kalkar' };
+  if (it.id === 'zincir') return { txt: '5. şubene özel' };
+  return null;
+}
+function cdTxt(ms) { ms = Math.max(0, ms); const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4), s2 = Math.floor(ms % 6e4 / 1000); return (d ? d + 'g ' : '') + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s2).padStart(2, '0'); }
+function endChip(it) { const e = offerEnd(it); if (!e) return ''; return e.at ? `<span class="shend" data-cd="${e.at}">${I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')}<b>${cdTxt(e.at - Date.now())}</b></span>` : `<span class="shend">${I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')}<b>${e.txt}</b></span>`; }
+function tlCard(it, big) {
+  const worth = it.worth ? `<s>${tl(it.worth)}</s>` : '';
+  const pct = it.worth ? Math.round((1 - it.price / it.worth) * 100) : 0;
+  return `<button class="sx ${big ? 'sxhero' : ''}" data-a="buy" data-v="${it.id}">${it.tag ? `<span class="sxtag ${/En iyi|Sadece|Haftalık|Bayram/.test(it.tag) ? 'hot' : ''}">${esc(it.tag)}</span>` : ''}
+    <span class="sxic">${I(SHOP_IC[it.cat] || SHOP_IC.Kasa)}</span><b>${esc(it.n)}</b><small>${esc(it.d)}</small>
+    ${pct ? `<span class="sxv">%${pct} avantaj · ${tl(it.worth)} değerinde</span>` : ''}${big ? endChip(it) : ''}
+    <span class="sxp">${worth}<em>${priceOf(it)}</em></span></button>`;
+}
+function skinPrev(k, w) { return `<span class="shprev" style="width:${w || 100}%">${facade({ name: st.name, brand: Object.assign({}, curBrand(), { color: k }), night: false, open: true, occ: .4, id: 'pv' + k, par: 'xMidYMid slice' })}</span>`; }
+function themePrev(id) { const c = THEMES[id].c; return `<span class="shtheme" style="--tb:${c[0]};--tp:${c[1]};--tl:${c[3]};--ti:${c[4]};--ta:${c[6]}"><i class="tbar"></i><i class="tcard"></i><i class="tcard2"></i><i class="tbtn"></i></span>`; }
+function gCard(it) {
+  const S = K.iapState(st), own = it.once && S.owned[it.id], can = S.gold >= it.gold;
+  const g = it.give; let prev = '';
+  if (g.skin) prev = skinPrev(g.skin); else if (g.theme) prev = themePrev(g.theme);
+  else if (g.loc) { const L = K.SLOCS[g.loc], d = DISTRICTS[L.did]; prev = `<span class="shloc">${I(SHOP_IC.Lokasyonlar)}<b>${esc(d.n)}</b><small>${esc(K.PROV[d.p].n)} · ${L.type === 'rooftop' ? 'Çatı terası' : 'Bahçeli kafe'}</small></span>`; }
+  return `<button class="sx g ${prev ? 'pv' : ''} ${own ? 'own' : ''}" data-a="${own ? 'noop' : (prev ? 'sprev' : 'gbuy')}" data-v="${it.id}">${prev}${prev ? '' : `<span class="sxic">${I(SHOP_IC[it.cat])}</span>`}<b>${esc(it.n)}</b><small>${esc(it.d)}</small>
+    <span class="sxp gp ${can || own ? '' : 'no'}">${own ? '<em>Sende var</em>' : `<em>${GOLD_I}${it.gold}</em>`}</span></button>`;
+}
+function shopPreview(id) {
+  const it = K.GSHOP.find(x => x.id === id); if (!it) return '';
+  const S = K.iapState(st), g = it.give, can = S.gold >= it.gold;
+  let big = '';
+  if (g.skin) big = `<div class="spbig">${facade({ name: st.name, brand: Object.assign({}, curBrand(), { color: g.skin }), night: false, open: true, occ: .6, id: 'pvb', par: 'xMidYMid slice' })}</div>`;
+  else if (g.theme) big = `<div class="spbig th">${themePrev(g.theme)}</div>`;
+  else if (g.loc) { const L = K.SLOCS[g.loc], d = DISTRICTS[L.did]; big = `<div class="spbig loc"><div>${I(SHOP_IC.Lokasyonlar)}<b>${esc(L.n)}</b><small>${esc(d.n)} · ${esc(K.PROV[d.p].n)}</small><p>${esc(L.d)}</p><ul><li>Bu dükkan sadece senin haritanda çıkar</li><li>Semt kilidi ve şube şartı aranmaz</li><li>Kira ve kurulum ayrıca ödenir; iyi yönetilmezse zarar edebilir</li></ul></div></div>`; }
+  return `<div class="sprev">${big}<div class="spinfo"><span class="lbl">${esc(it.cat)}</span><h3>${esc(it.n)}</h3><p class="muted">${esc(it.d)}</p>
+    <div class="row" style="gap:8px;margin-top:auto"><button class="btn" data-a="sprevx">Geri</button><button class="gold" data-a="gbuy" data-v="${it.id}">${GOLD_I}${it.gold} Altın ile al</button></div>${can ? '' : `<small class="muted">${it.gold - S.gold} Altın eksik · <button class="lnk" data-a="shoptab" data-v="Kasa">Altın al</button></small>`}</div></div>`;
+}
 function shopSheet() {
-  const S = K.iapState(st); const cats = ['Teklif', 'Kasa', 'İtibar', 'Hız', 'Premium'];
-  const val = it => { const g = it.give; return [g.cash ? fmtK(g.cash * st.world.refIdx) : '', g.rep ? '+' + g.rep + ' itibar' : '', g.followers ? '+' + (g.followers / 1000) + ' B takipçi' : '', g.tickets ? g.tickets + ' bilet' : '', g.moralAll ? 'moral +' + g.moralAll : '', g.score ? 'not +' + g.score : '', g.noads ? 'Reklamsız' : ''].filter(Boolean).join(' · '); };
-  return `<div class="sheet shop" role="dialog" aria-modal="true" aria-label="Mağaza"><header class="sth"><span class="sti">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</span><div><h2>Mağaza</h2><small>${S.tickets ? S.tickets + ' ruhsat biletin var · ' : ''}${S.noads ? 'Reklamsız aktif · ' : ''}Deneme sürümü: ücret alınmaz</small></div><button class="ibtn" data-a="closeshop" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
-    <div class="shopb">${cats.map(c => { const its = K.IAP.filter(x => x.cat === c && K.iapAvail(st, x)); if (!its.length) return ''; return `<section class="shc"><h4>${c}</h4><div class="shg ${c === 'Teklif' ? 'one' : ''}">${its.map(it => `<button class="shi ${it.cat === 'Teklif' ? 'hero' : ''}" data-a="buy" data-v="${it.id}">${it.tag ? `<span class="shtag">${esc(it.tag)}</span>` : ''}<span class="shic">${I(SHOP_IC[it.cat])}</span><b>${esc(it.n)}</b><small>${esc(it.d)}</small><span class="shv">${val(it)}</span><span class="shp">${(window.KZIAP && KZIAP.prices && KZIAP.prices[it.id]) || tl(it.price)}</span></button>`).join('')}</div></section>`; }).join('')}
-    <small class="muted" style="font-size:9.5px;display:block;margin-top:6px">Para ödülleri enflasyonla birlikte büyür. Satın almalar sadece bu kayda işler.</small></div></div>`;
+  const S = K.iapState(st); const tab = SHOP_TABS.includes(ui.shopTab) ? ui.shopTab : 'Öne çıkan';
+  const tlAv = cat => K.IAP.filter(x => x.cat === cat && K.iapAvail(st, x));
+  const gAv = cat => K.GSHOP.filter(x => x.cat === cat && (K.iapAvail(st, x) || (x.once && S.owned[x.id])));
+  const offers = tlAv('Teklifler');
+  let body = '';
+  if (ui.shopPrev) body = shopPreview(ui.shopPrev);
+  else if (tab === 'Öne çıkan') {
+    const hero = offers[0] || K.IAP.find(x => x.id === 'gold_m');
+    const picks = [K.IAP.find(x => x.id === 'patron'), K.IAP.find(x => x.id === 'gold_m')].filter(x => x && K.iapAvail(st, x) && x !== hero);
+    const gp = [K.GSHOP.find(x => x.id === 'loc_galata'), K.GSHOP.find(x => x.id === 'skin_neon')].filter(x => x && K.iapAvail(st, x));
+    body = `<div class="sxg2 feat">${tlCard(hero, true)}<div class="sxg">${picks.map(x => tlCard(x)).join('')}${gp.map(gCard).join('')}</div></div>`;
+  } else if (tab === 'Teklifler') body = offers.length ? `<div class="sxg">${offers.map(x => tlCard(x, true)).join('')}</div>` : `<p class="muted shempty">Şu an aktif teklif yok. Haftalık fırsat her pazartesi yenilenir.</p>`;
+  else if (tab === 'Kalıcı') body = `<div class="sxg">${K.IAP.filter(x => x.cat === 'Kalıcı').map(x => S.owned[x.id] ? `<div class="sx own"><span class="sxic">${I(SHOP_IC['Kalıcı'])}</span><b>${esc(x.n)}</b><small>${esc(x.d)}</small><span class="sxp"><em>Sende var</em></span></div>` : tlCard(x)).join('')}</div>`;
+  else if (tab === 'Kasa') body = `<h5 class="shh5">Altın Çekirdek</h5><div class="sxg">${tlAv('Kasa').filter(x => x.give.gold).map(x => tlCard(x)).join('')}</div><h5 class="shh5">Nakit</h5><div class="sxg">${tlAv('Kasa').filter(x => x.give.cash).map(x => tlCard(x)).join('')}</div>`;
+  else body = `<div class="sxg ${tab === 'Görünüm' || tab === 'Lokasyonlar' ? 'wide' : ''}">${gAv(tab).map(gCard).join('')}</div>`;
+  const first = !S.firstDone ? `<div class="shfirst">${I(SHOP_IC.Teklifler)}<span><b>İlk alımına 2 kat!</b> İlk paketinde nakit ve Altın iki katı gelir.</span></div>` : '';
+  return `<div class="sheet shop2" role="dialog" aria-modal="true" aria-label="Mağaza">
+    <header class="sth"><span class="sti">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</span><div><h2>Mağaza</h2><small>${S.tickets ? S.tickets + ' ruhsat bileti · ' : ''}${S.noads ? 'Reklamsız · ' : ''}${window.KZIAP ? '' : 'Deneme: ücret alınmaz'}</small></div>
+      <button class="goldchip" data-a="shoptab" data-v="Kasa">${GOLD_I}<b class="num">${S.gold.toLocaleString('tr-TR')}</b><span>+</span></button>
+      <button class="ibtn" data-a="closeshop" aria-label="Kapat"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+    <nav class="shtabs" role="tablist">${SHOP_TABS.map(t => `<button role="tab" aria-selected="${t === tab}" class="${t === tab ? 'on' : ''}" data-a="shoptab" data-v="${t}">${I(SHOP_IC[t])}${t}${t === 'Teklifler' && offers.length ? `<i class="dot">${offers.length}</i>` : ''}</button>`).join('')}</nav>
+    <div class="shbody">${ui.shopPrev ? '' : first}${body}<small class="muted shfoot">Altın Çekirdek görevlerden ve günlük ödüllerden de kazanılır. Para ödülleri enflasyonla birlikte büyür.</small></div></div>`;
 }
 function buyMock(it) {
   if (window.KZIAP && window.KZIAP.purchase) return window.KZIAP.purchase(it.id);
@@ -1439,7 +1535,7 @@ function loop(now) {
       acc = 0; ui._keepScroll = true; liveRender();
     } else if (!st.paused) {
       acc += dt; let ticked = false, guard = 0;
-      let dch = false; while (acc >= MS_PER_HOUR && guard++ < 50) { acc -= MS_PER_HOUR; const day = st.day; K.tickHour(st); ticked = true; if (st.day !== day) { save(); dch = true; } if (blocking()) { acc = 0; break; } }
+      const MSH = MS_PER_HOUR / (st.speed === 2 && st.iap && st.iap.fast ? 2 : 1); let dch = false; while (acc >= MSH && guard++ < 50) { acc -= MSH; const day = st.day; K.tickHour(st); ticked = true; if (st.day !== day) { save(); dch = true; } if (blocking()) { acc = 0; break; } }
       if (ticked) { liveRender(dch); coinPop(); } else if (ui._pendingLive && performance.now() - (ui._touchAt || 0) > 1500) liveRender(true); ambience();
     }
   }
@@ -1448,6 +1544,7 @@ function loop(now) {
 
 /* ---------- başlat ---------- */
 window.addEventListener('kzupdate', () => { if (st) render(); });
+setInterval(() => { document.querySelectorAll('[data-cd]').forEach(e => { const b = e.querySelector('b'); if (b) b.textContent = cdTxt(+e.dataset.cd - Date.now()); }); }, 1000);
 document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) save(); else { checkOffline(); render(); } });
 window.addEventListener('pagehide', () => { if (st) save(); });
 const saved = loadSave();

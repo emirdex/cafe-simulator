@@ -348,8 +348,9 @@ function reqMissing(st, req) {
   if (req.cash && st.cash < req.cash) miss.push('En az ' + fmt(req.cash) + ' nakit gerekiyor');
   return miss;
 }
-function districtLock(st, did) { return reqMissing(st, DISTRICTS[did].req); }
+function districtLock(st, did) { if (st.iap && st.iap.locs && Object.keys(st.iap.locs).some(k => SLOCS[k] && SLOCS[k].did === did)) return []; return reqMissing(st, DISTRICTS[did].req); }
 function typeLock(st, type, did) {
+  if (did && st.iap && st.iap.locs && Object.keys(st.iap.locs).some(k => SLOCS[k] && SLOCS[k].did === did && SLOCS[k].type === type)) return [];
   const T = TYPES[type]; const m = reqMissing(st, T.req);
   if (type === 'metro' && did && (!METRO_P.has(DISTRICTS[did].p) || (DISTRICTS[did].p !== '34' && !DISTRICTS[did].central))) m.push('Bu ilçede metro ya da raylı sistem istasyonu yok');
   if (T.minElit && did && DISTRICTS[did].elit < T.minElit) m.push('Bu semtte rooftop için yeterli talep yok (semt profili ' + T.minElit + '+ gerekir)');
@@ -367,10 +368,20 @@ function reputation(st) {
 
 /* ---------- ilanlar ---------- */
 function listingKey(did, type) { return did + ':' + type; }
+function specialListing(st, did, type) {
+  const S = st.iap; if (!S || !S.locs) return null;
+  const k = Object.keys(S.locs).find(k => SLOCS[k] && SLOCS[k].did === did && SLOCS[k].type === type); if (!k) return null;
+  if (st.branches.some(b => b.special === k)) return null;
+  const SL = SLOCS[k], d = DISTRICTS[did], A = ARCH[SL.arch];
+  const area = A.area, rent = r500(d.rent * area * A.rm * 1.15);
+  return { id: 'S' + k, did, type, arch: SL.arch, area, tables: A.tables ? Math.max(2, A.tables) : 0, nm: SL.n, rent, deposit: rent * 3, hasFront: true, flic: true, smoke: true,
+    frontTables: Math.max(3, Math.round(area / 20)), aptFee: 0, havaParasi: 0, ciro: 0, aidat: 0, pot: SL.pot, hint: 'Özel lokasyon: ' + SL.d, inspected: true, nearby: [], blocked: '', special: k };
+}
 function getListings(st, did, type) {
   const k = listingKey(did, type); const L = st.listings[k];
-  if (L && L.until > st.day) return L.items;
-  const items = genListings(st, did, type);
+  const sp = specialListing(st, did, type);
+  if (L && L.until > st.day) { if (sp && !L.items.some(x => x.special === sp.special)) L.items.unshift(sp); return L.items; }
+  const items = genListings(st, did, type); if (sp) items.unshift(sp);
   st.listings[k] = { until: st.day + 7, items };
   return items;
 }
@@ -513,7 +524,7 @@ function openBranch(st, L, ch) {
   const wait = waitDays(st, L);
   const menu = {};
   for (const id of T.menu) menu[id] = { on: !PRODUCTS[id].needs || ch.kitchen, price: Math.round(PRODUCTS[id].ref * priceIdx(L.did) * st.world.refIdx / 5) * 5 };
-  const b = {
+  const b = { special: L.special || null, 
     id: st.nextId++, name: (ch.name || DISTRICTS[L.did].n).trim().slice(0, 30), d: L.did, type: L.type, arch: L.arch, archN: L.nm || ARCH[L.arch].n,
     area: L.area, tables: L.tables, frontTables: L.frontTables, hasFront: L.hasFront, flic: L.flic, useFront: !!(ch.useFront && L.hasFront),
     aptFee: L.aptFee, smoke: L.smoke || !!(ch.useFront && L.hasFront), rent: L.rent, deposit: L.deposit, ciro: L.ciro, aidat: L.aidat, havaParasi: L.havaParasi,
@@ -630,7 +641,7 @@ function staffCap(st, b) {
   const interns = b.interns && b.interns.until >= st.day ? b.interns.n * .35 : 0;
   const eff = Math.max(.5, b.staff * .55 + interns + ownerBonus(st) + (b.manager ? .5 : 0) - waiters * .55);
   const moralF = .75 + .35 * (b.moral / 100);
-  return eff * 22 * EQUIP[b.equip].speed * moralF;
+  return eff * 22 * EQUIP[b.equip].speed * moralF * (st.iap && st.iap.akademi ? 1.15 : 1);
 }
 const K_INT = 0.05;
 
@@ -699,7 +710,7 @@ function branchHour(st, b, h) {
     const itS = S.items * C.basket * pm, itT = Math.min(S.items, 1.15) * pm;
     const units = seated * itS + takeaway * itT, mc = b.marginCut && b.marginCut >= st.day ? .9 : 1;
     if (units > 0 && o.fav) { const it = b.mAcc.it || (b.mAcc.it = {}); const per = units / o.fav.length; for (const id of o.fav) { const r = it[id] || (it[id] = [0, 0, 0]); r[0] += per; r[1] += per * b.menu[id].price * mc; r[2] += per * unitCost(st, id) * 1.12; } }
-    rev += units * o.price * mc; cogs += (seated * itS + takeaway * itT) * o.cost * 1.0 + takeaway * itT * 6 * st.world.costIdx; served += got;
+    rev += units * o.price * mc * (st.iap && st.iap.patron ? 1.05 : 1); cogs += (seated * itS + takeaway * itT) * o.cost * 1.0 + takeaway * itT * 6 * st.world.costIdx; served += got;
     const priceSat = o.x > 1 ? -(o.x - 1) * 55 : (1 - o.x) * 10;
     const smk = (x.s === 'ogrenci' || x.s === 'grup' || x.s === 'beyazyaka' || x.s === 'macsever') ? smokePen : 0;
     const sat = 62 + o.q + dek + waitPen + priceSat + smk + (o.fit < .6 ? -6 : 0) + (b.moral - 70) * .15;
@@ -748,34 +759,102 @@ function maybeNewMall(st) {
 
 /* ---------- oyun içi satın alma ---------- */
 // fiyatlar mağaza fiyat kademelerine göre (₺). Mobil sürümde window.KZIAP.purchase(sku) gerçek ödemeyi yapar.
+// ===== Mağaza =====
+// TL ürünleri App Store / Google Play üzerinden satılır (kimlik: io.arcbyte.kafezinciri.<id>).
+// Altın Çekirdek oyun içi para birimidir: TL ile alınır, görev ve reklamlardan az miktarda kazanılır, görünüm/lokasyon/hız ürünlerinde harcanır.
+const WEEK_MS = 7 * 864e5;
+function weekNo(now) { return Math.floor(((now || Date.now()) + 3 * 864e5) / WEEK_MS); } // haftalar pazartesi başlar
+function weekEnds(now) { return (weekNo(now) + 1) * WEEK_MS - 3 * 864e5; }
 const IAP = [
-  { id: 'starter', cat: 'Teklif', n: 'Başlangıç paketi', d: '1,5 Mn ₺ + 5 itibar + 3 anında ruhsat bileti', price: 79.99, once: true, until: 30, tag: 'Tek seferlik · %60 avantaj', give: { cash: 1500000, rep: 5, tickets: 3 } },
+  // Teklifler (zamanlı / duruma göre)
+  { id: 'starter', cat: 'Teklifler', n: 'Başlangıç paketi', d: '1,5 Mn ₺ + 60 Altın + 3 ruhsat bileti', price: 79.99, once: true, until: 30, tag: 'Tek seferlik', worth: 249.99, give: { cash: 1500000, gold: 60, tickets: 3 } },
+  { id: 'melek', cat: 'Teklifler', n: 'Melek yatırımcı', d: 'Zor günde 3 Mn ₺ sermaye + kredi notu +200', price: 99.99, tag: 'Sadece şimdi', worth: 199.99, cond: st => st.cash < 0 || (st.bank && st.bank.warn), cool: 60, give: { cash: 3000000, score: 200 } },
+  { id: 'zincir', cat: 'Teklifler', n: 'Zincir sahibi paketi', d: '5. şubeye özel: 5 Mn ₺ + 150 Altın + 10 itibar', price: 149.99, once: true, tag: '5 şube ödülü', worth: 399.99, cond: st => st.branches.length >= 5, give: { cash: 5000000, gold: 150, rep: 10 } },
+  { id: 'bayram', cat: 'Teklifler', n: 'Bayram paketi', d: 'Bayram boyunca: 2 Mn ₺ + 120 Altın + ekibe bayram ikramiyesi', price: 89.99, tag: 'Bayrama özel', worth: 229.99, cond: st => bayramNow(st), cool: 300, give: { cash: 2000000, gold: 120, moralAll: 20 } },
+  { id: 'haftalik_a', cat: 'Teklifler', n: 'Haftanın fırsatı · Altın kesesi', d: '300 Altın, normalden %50 ucuz', price: 49.99, tag: 'Haftalık', worth: 99.99, week: 0, give: { gold: 300 } },
+  { id: 'haftalik_b', cat: 'Teklifler', n: 'Haftanın fırsatı · Sermaye', d: '3 Mn ₺ nakit, normalden %50 ucuz', price: 59.99, tag: 'Haftalık', worth: 119.99, week: 1, give: { cash: 3000000 } },
+  { id: 'haftalik_c', cat: 'Teklifler', n: 'Haftanın fırsatı · Hızlı açılış', d: '5 ruhsat bileti + 100 Altın', price: 39.99, tag: 'Haftalık', worth: 89.99, week: 2, give: { tickets: 5, gold: 100 } },
+  // Kalıcı yükseltmeler
+  { id: 'patron', cat: 'Kalıcı', n: 'Patron Kartı', d: 'Oyun kapalıyken 2 aya kadar ilerler · tüm şubelerde ciro kalıcı +%5', price: 249.99, once: true, tag: 'En iyi değer', give: { perm: 'patron' } },
+  { id: 'hizli', cat: 'Kalıcı', n: 'Hızlı mod', d: 'Oyun 2 kat hızda oynanabilir (30 saniye = 1 gün)', price: 149.99, once: true, give: { perm: 'fast' } },
+  { id: 'akademi', cat: 'Kalıcı', n: 'Barista Akademisi', d: 'Tüm şubelerde servis hızı kalıcı +%15', price: 99.99, once: true, give: { perm: 'akademi' } },
+  { id: 'noads', cat: 'Kalıcı', n: 'Reklamsız', d: 'Reklam ödülleri video izlemeden anında gelir', price: 149.99, once: true, give: { noads: true } },
+  // Kasa: nakit ve Altın Çekirdek paketleri
+  { id: 'gold_s', cat: 'Kasa', n: 'Avuç dolusu Altın', d: '100 Altın Çekirdek', price: 29.99, give: { gold: 100 } },
+  { id: 'gold_m', cat: 'Kasa', n: 'Kese dolusu Altın', d: '550 Altın Çekirdek · %10 bonus', price: 129.99, tag: 'En çok tercih edilen', give: { gold: 550 } },
+  { id: 'gold_l', cat: 'Kasa', n: 'Çuval dolusu Altın', d: '1.500 Altın Çekirdek · %25 bonus', price: 299.99, tag: 'En iyi değer', give: { gold: 1500 } },
   { id: 'cash_s', cat: 'Kasa', n: 'Kasa takviyesi', d: '500 B ₺ nakit', price: 29.99, give: { cash: 500000 } },
-  { id: 'cash_m', cat: 'Kasa', n: 'Yatırımcı desteği', d: '2,5 Mn ₺ nakit', price: 99.99, tag: 'En çok tercih edilen', give: { cash: 2500000 } },
-  { id: 'cash_l', cat: 'Kasa', n: 'Holding sermayesi', d: '10 Mn ₺ nakit', price: 299.99, tag: '%25 daha fazla', give: { cash: 10000000 } },
-  { id: 'rep_s', cat: 'İtibar', n: 'Basın bülteni', d: '+5 marka itibarı', price: 49.99, give: { rep: 5 } },
-  { id: 'rep_l', cat: 'İtibar', n: 'Ulusal kampanya', d: '+12 marka itibarı ve 20.000 takipçi', price: 129.99, give: { rep: 12, followers: 20000 } },
-  { id: 'fol', cat: 'İtibar', n: 'Sosyal medya paketi', d: '+25.000 takipçi', price: 39.99, give: { followers: 25000 } },
-  { id: 'tickets', cat: 'Hız', n: 'Anında ruhsat biletleri', d: '5 bilet: ruhsat beklemeden şubeyi hemen açar', price: 59.99, give: { tickets: 5 } },
-  { id: 'moral', cat: 'Hız', n: 'Ekip kutlaması', d: 'Tüm şubelerde moral +25', price: 24.99, give: { moralAll: 25 } },
-  { id: 'score', cat: 'Hız', n: 'Kredi notu danışmanlığı', d: 'Banka notu +300', price: 69.99, give: { score: 300 } },
-  { id: 'noads', cat: 'Premium', n: 'Reklamsız', d: 'Reklam ödülleri video izlemeden anında gelir', price: 149.99, once: true, give: { noads: true } }
+  { id: 'cash_m', cat: 'Kasa', n: 'Yatırımcı desteği', d: '2,5 Mn ₺ nakit', price: 99.99, give: { cash: 2500000 } },
+  { id: 'cash_l', cat: 'Kasa', n: 'Holding sermayesi', d: '10 Mn ₺ nakit · %25 fazla', price: 299.99, give: { cash: 10000000 } }
 ];
-function iapState(st) { return st.iap = st.iap || { owned: {}, tickets: 0, spent: 0 }; }
-function iapAvail(st, it) { const S = iapState(st); if (it.once && S.owned[it.id]) return false; if (it.until && st.day > it.until) return false; return true; }
-function iapGive(st, id) {
-  const it = IAP.find(x => x.id === id); if (!it || !iapAvail(st, it)) return { ok: false, msg: 'Bu paket şu an alınamıyor.' };
-  const S = iapState(st), g = it.give, out = [];
-  if (g.cash) { const v = Math.round(g.cash * st.world.refIdx / 1000) * 1000; st.cash += v; out.push(fmt(v)); }
+// Altınla alınanlar
+const SKINS = { ahsap: 'Ahşap bistro', neon: 'Neon gece', mermer: 'Mermer lüks', nostalji: 'Nostaljik Beyoğlu' };
+const PTHEMES = { t02: 'Zümrüt Gece', t05: 'Mürdüm & Gül', t07: 'Gece Neon', t15: 'Mermer & Altın' };
+const SLOCS = {
+  galata: { n: 'Galata Kulesi dibi', did: 'd34_beyoglu', type: 'rooftop', arch: 'R1', d: 'Kuleye bakan çatı terası. Turist akışı çok yüksek.', pot: 1.6 },
+  yali: { n: 'Bebek sahilinde yalı kafe', did: 'bebek', type: 'kafe', arch: 'F', d: 'Boğaz kıyısında bahçeli yalı. Hafta sonu dolup taşar.', pot: 1.55 },
+  kapadokya: { n: 'Kapadokya balon terası', did: 'd50_urgup', type: 'rooftop', arch: 'R1', d: 'Gün doğumunda balonlara bakan teras. Turist sezonunda rekor ciro.', pot: 1.7 },
+  bodrum: { n: 'Bodrum marina kafesi', did: 'd48_bodrum', type: 'kafe', arch: 'F', d: 'Yatların önünde sahil kafesi. Yazın çok güçlü.', pot: 1.6 }
+};
+const GSHOP = [
+  ...Object.entries(SLOCS).map(([k, L]) => ({ id: 'loc_' + k, cat: 'Lokasyonlar', n: L.n, d: L.d, gold: 500, once: true, give: { loc: k } })),
+  ...Object.entries(SKINS).map(([k, n]) => ({ id: 'skin_' + k, cat: 'Görünüm', n: n + ' cephe', d: 'Tüm dükkanların cephesi, tentesi ve tabelası', gold: 150, once: true, give: { skin: k } })),
+  ...Object.entries(PTHEMES).map(([k, n]) => ({ id: 'theme_' + k, cat: 'Görünüm', n: n + ' tema', d: 'Oyunun arayüz renkleri', gold: 80, once: true, give: { theme: k } })),
+  { id: 'g_ticket', cat: 'Hız', n: 'Ruhsat bileti', d: 'Ruhsat beklemeden şubeyi hemen açar', gold: 20, give: { tickets: 1 } },
+  { id: 'g_week', cat: 'Hız', n: '1 hafta ileri sar', d: 'Oyunu 7 gün ileri alır; şubeler çalışmaya devam eder', gold: 40, give: { advance: 7 } },
+  { id: 'g_moral', cat: 'Hız', n: 'Ekip kutlaması', d: 'Tüm şubelerde moral +25', gold: 25, give: { moralAll: 25 } },
+  { id: 'g_rep', cat: 'Hız', n: 'Basın bülteni', d: '+5 marka itibarı', gold: 40, give: { rep: 5 } },
+  { id: 'g_fol', cat: 'Hız', n: 'Sosyal medya kampanyası', d: '+25.000 takipçi', gold: 30, give: { followers: 25000 } },
+  { id: 'g_score', cat: 'Hız', n: 'Kredi notu danışmanlığı', d: 'Banka notu +300', gold: 60, give: { score: 300 } },
+  { id: 'g_debt', cat: 'Hız', n: 'Borç yapılandırma', d: 'Tüm kredilerin faizi %30 düşer, banka ihtarı 30 gün ertelenir', gold: 80, cond: st => st.bank.loans.length > 0 || !!st.bank.warn, give: { debt: true } }
+];
+function bayramNow(st) { try { const r = ramadanInfo(st), k = kurbanInfo(st); return !!((r && r.phase === 'bayram') || (k && k.phase === 'kurban')); } catch (e) { return false; } }
+function iapState(st) { const S = st.iap = st.iap || { owned: {}, tickets: 0, spent: 0 }; if (S.gold == null) S.gold = 15; S.skins = S.skins || {}; S.themes = S.themes || {}; S.locs = S.locs || {}; S.last = S.last || {}; return S; }
+function iapAvail(st, it, now) {
+  const S = iapState(st);
+  if (it.once && S.owned[it.id]) return false;
+  if (it.until && st.day > it.until) return false;
+  if (it.week != null && weekNo(now) % 3 !== it.week) return false;
+  if (it.cond && !it.cond(st)) return false;
+  if (it.cool && S.last[it.id] != null && st.day - S.last[it.id] < it.cool) return false;
+  return true;
+}
+function applyGive(st, g, mult) {
+  const S = iapState(st), out = []; mult = mult || 1;
+  if (g.cash) { const v = Math.round(g.cash * mult * st.world.refIdx / 1000) * 1000; st.cash += v; out.push(fmt(v)); }
+  if (g.gold) { const v = Math.round(g.gold * mult); S.gold += v; out.push(v + ' Altın'); }
   if (g.rep) { st.repBonus = (st.repBonus || 0) + g.rep; out.push('+' + g.rep + ' itibar'); }
   if (g.followers) { st.mkt.followers += g.followers; out.push('+' + g.followers.toLocaleString('tr-TR') + ' takipçi'); }
   if (g.tickets) { S.tickets += g.tickets; out.push(g.tickets + ' ruhsat bileti'); }
   if (g.moralAll) { for (const b of st.branches) b.moral = Math.min(100, b.moral + g.moralAll); out.push('moral +' + g.moralAll); }
   if (g.score) { st.bank.score = Math.min(1900, st.bank.score + g.score); out.push('kredi notu +' + g.score); }
   if (g.noads) { S.noads = true; out.push('reklamsız'); }
-  S.owned[id] = (S.owned[id] || 0) + 1; S.spent += it.price;
-  log(st, 'Mağaza: ' + it.n + ' · ' + out.join(', ') + '.', 'good'); return { ok: true, msg: it.n + ': ' + out.join(', ') };
+  if (g.perm) { S[g.perm] = true; out.push('kalıcı olarak açıldı'); }
+  if (g.skin) { S.skins[g.skin] = true; st.brand = Object.assign({}, st.brand || {}, { color: g.skin }); out.push('cephe uygulandı'); }
+  if (g.theme) { S.themes[g.theme] = true; out.push('tema açıldı'); }
+  if (g.loc) { S.locs[g.loc] = true; const L = SLOCS[g.loc]; delete st.listings[listingKey(L.did, L.type)]; out.push('haritada açıldı: ' + DISTRICTS[L.did].n); }
+  if (g.debt) { for (const l of st.bank.loans) { l.r *= .7; l.pay = Math.round(l.bal * l.r / (1 - Math.pow(1 + l.r, -Math.max(1, l.left)))); } if (st.bank.warn) st.bank.warn.until += 30; out.push('faizler düştü'); }
+  if (g.advance) { const r = advanceHours(st, g.advance * 24); out.push(r.days + ' gün geçti'); }
+  return out;
 }
+// TL satın alma (mağaza ödemesi onaylandıktan sonra)
+function iapGive(st, id) {
+  const it = IAP.find(x => x.id === id); if (!it || !iapAvail(st, it)) return { ok: false, msg: 'Bu paket şu an alınamıyor.' };
+  const S = iapState(st); const first = !S.firstDone && !it.give.perm && !it.give.noads;
+  const out = applyGive(st, it.give, first ? 2 : 1);
+  S.firstDone = true; S.owned[id] = (S.owned[id] || 0) + 1; S.spent += it.price; S.last[id] = st.day;
+  log(st, 'Mağaza: ' + it.n + ' · ' + out.join(', ') + (first ? ' (ilk alım 2 kat)' : '') + '.', 'good');
+  return { ok: true, msg: it.n + ': ' + out.join(', ') + (first ? ' · ilk alım bonusu 2 kat!' : '') };
+}
+// Altınla satın alma
+function goldBuy(st, id) {
+  const it = GSHOP.find(x => x.id === id); if (!it || !iapAvail(st, it)) return { ok: false, msg: 'Bu ürün şu an alınamıyor.' };
+  const S = iapState(st); if (S.gold < it.gold) return { ok: false, need: it.gold - S.gold, msg: (it.gold - S.gold) + ' Altın eksik.' };
+  S.gold -= it.gold; const out = applyGive(st, it.give); S.owned[id] = (S.owned[id] || 0) + 1; S.last[id] = st.day;
+  log(st, 'Altınla alındı: ' + it.n + ' · ' + out.join(', ') + '.', 'good');
+  return { ok: true, msg: it.n + ': ' + out.join(', ') };
+}
+function earnGold(st, v, why) { const S = iapState(st); S.gold += v; if (why) log(st, '+' + v + ' Altın Çekirdek · ' + why, 'good'); return v; }
 function useTicket(st, bid) { const S = iapState(st), b = st.branches.find(x => x.id === bid); if (!b || b.status !== 'hazirlik' || S.tickets <= 0) return { ok: false, msg: 'Bilet yok.' }; S.tickets--; b.daysLeft = 0; b.status = 'acik'; b.openedDay = st.day; log(st, b.name + ' ruhsat bileti ile hemen açıldı.', 'good'); return { ok: true, msg: b.name + ' açıldı!' }; }
 
 /* ---------- ödüllü reklamlar ---------- */
@@ -794,10 +873,10 @@ function adReward(st, kind, arg) {
   if (kind === 'ruhsat') { const b = st.branches.find(x => x.id === arg); if (!b || b.status !== 'hazirlik') return { ok: false }; b.daysLeft -= 3; if (b.daysLeft <= 0) { b.daysLeft = 0; b.status = 'acik'; b.openedDay = st.day; log(st, b.name + ' ruhsatlarını aldı ve açıldı.', 'good'); msg = b.name + ' açıldı!'; } else msg = 'Ruhsat 3 gün kısaldı: ' + b.daysLeft + ' gün kaldı.'; }
   else if (kind === 'ilan') { refreshListings(st, arg.did, arg.type, 0); msg = 'Yeni ilanlar ücretsiz listelendi.'; }
   else if (kind === 'incele') { const L = (arg.mall ? mallListings(st, arg.mall) : getListings(st, arg.did, arg.type)).find(x => x.id === arg.id); if (!L || L.inspected) return { ok: false }; L.inspected = true; msg = 'Dükkan ücretsiz incelendi.'; }
-  else if (kind === 'aybonus') { const r = st.reports[arg]; if (!r || r.adBonus) return { ok: false }; const v = monthBonus(st, r); r.adBonus = v; st.cash += v; st.month.extra += v; msg = fmt(v) + ' sponsor primi kasaya geçti.'; }
+  else if (kind === 'aybonus') { const r = st.reports[arg]; if (!r || r.adBonus) return { ok: false }; const v = monthBonus(st, r); r.adBonus = v; st.cash += v; st.month.extra += v; earnGold(st, 5); msg = fmt(v) + ' sponsor primi + 5 Altın kasaya geçti.'; }
   else if (kind === 'ihtar') { if (!st.bank.warn || st.bank.warn.ad) return { ok: false }; st.bank.warn.until += 5; st.bank.warn.ad = true; msg = 'Banka 5 gün ek süre verdi.'; }
   else if (kind === 'offline') { const o = st.offlineLast; if (!o || o.doubled) return { ok: false }; o.doubled = true; st.cash += o.amt; st.month.extra += o.amt; msg = 'Yatırımcı primi: +' + fmt(o.amt) + '.'; }
-  else if (kind === 'gunluk') { const v = dailyGift(st); st.cash += v; st.month.extra += v; msg = 'Günlük ödül: ' + fmt(v) + '.'; }
+  else if (kind === 'gunluk') { const v = dailyGift(st); st.cash += v; st.month.extra += v; earnGold(st, 3); msg = 'Günlük ödül: ' + fmt(v) + ' + 3 Altın.'; }
   else if (kind === 'moral') { const b = st.branches.find(x => x.id === arg); if (!b) return { ok: false }; b.moral = Math.min(100, b.moral + 12); msg = 'Ekibe ikram: moral +12.'; }
   else if (kind === 'ariza') { msg = 'Servis ücretsiz geldi.'; }
   adMark(st, kind); return { ok: true, msg };
@@ -829,7 +908,7 @@ const GOALS = [
 function goalReward(st, g) { const r = g.r, o = []; if (r.cash) { const v = Math.round(r.cash * st.world.refIdx / 1000) * 1000; st.cash += v; st.month.extra += v; o.push(fmt(v)); } if (r.rep) { st.repBonus = (st.repBonus || 0) + r.rep; o.push('+' + r.rep + ' itibar'); } if (r.followers) { st.mkt.followers += r.followers; o.push('+' + r.followers.toLocaleString('tr-TR') + ' takipçi'); } return o.join(', '); }
 function checkGoals(st) {
   st.goals = st.goals || {};
-  for (const g of GOALS) { if (st.goals[g.id]) continue; let ok = false; try { ok = g.f(st); } catch (e) {} if (ok) { const rw = goalReward(st, g); st.goals[g.id] = st.day; log(st, 'Hedef tamamlandı: ' + g.n + ' · ödül ' + rw + '.', 'good'); st.queue.push({ k: 'hedef', g: g.id, rw }); } }
+  for (const g of GOALS) { if (st.goals[g.id]) continue; let ok = false; try { ok = g.f(st); } catch (e) {} if (ok) { const rw = goalReward(st, g) + ' + ' + earnGold(st, 10) + ' Altın'; st.goals[g.id] = st.day; log(st, 'Hedef tamamlandı: ' + g.n + ' · ödül ' + rw + '.', 'good'); st.queue.push({ k: 'hedef', g: g.id, rw }); } }
 }
 
 /* ---------- müşteri yorumları ---------- */
@@ -893,22 +972,27 @@ function msDay(st) {
   }
 }
 // uygulama kapalıyken zaman akar: gerçek 1 dakika = 1 oyun günü, en fazla 30 gün (1 ay)
-function simulateAway(st, now) {
-  if (!st || !st.savedAt || st.over) return null;
-  const mins = (now - st.savedAt) / 60000; if (mins < 1) return null;
-  const hours = Math.min(30 * 24, Math.floor(mins * 24)); if (hours < 24) return null;
-  const cash0 = st.cash, day0 = st.day, rev0 = {}; st.branches.forEach(b => { rev0[b.id] = (b.hist || []).length; });
+function advanceHours(st, hours) {
+  const cash0 = st.cash, day0 = st.day;
   const prevNo = st._noEvents; st._noEvents = true; let n = 0;
   while (n++ < hours && !st.over && !st.crisis) {
     tickHour(st);
-    // yokken karar isteyen olaylar birikmesin: sadece rapor ve sistem bildirimleri kalır
     st.queue = st.queue.filter(e => ['rapor', 'asgari', 'kira', 'zarar', 'hedef', 'ihtar', 'avmacilis'].includes(e.k));
   }
   st._noEvents = prevNo;
-  let rev = 0, cust = 0; st.branches.forEach(b => { const h = (b.hist || []).slice(-(st.day - day0)); h.forEach(x => { rev += x.rev; cust += x.cust; }); });
-  const gain = st.cash - cash0; st.offlineLast = gain > 0 ? { amt: Math.round(gain * .5 / 500) * 500, doubled: false } : null;
-  log(st, 'Sen yokken ' + (st.day - day0) + ' gün geçti.', gain >= 0 ? 'good' : 'warn');
-  return { days: st.day - day0, gain, rev, cust, capped: mins > 30, bonus: st.offlineLast ? st.offlineLast.amt : 0 };
+  let rev = 0, cust = 0; const nd = st.day - day0; if (nd > 0) st.branches.forEach(b => { (b.hist || []).slice(-nd).forEach(x => { rev += x.rev; cust += x.cust; }); });
+  return { days: nd, gain: st.cash - cash0, rev, cust };
+}
+// uygulama kapalıyken zaman akar: gerçek 1 dakika = 1 oyun günü, en fazla 30 gün (Patron Kartı ile 60)
+function simulateAway(st, now) {
+  if (!st || !st.savedAt || st.over) return null;
+  const maxD = iapState(st).patron ? 60 : 30;
+  const mins = (now - st.savedAt) / 60000; if (mins < 1) return null;
+  const hours = Math.min(maxD * 24, Math.floor(mins * 24)); if (hours < 24) return null;
+  const r = advanceHours(st, hours);
+  st.offlineLast = r.gain > 0 ? { amt: Math.round(r.gain * .5 / 500) * 500, doubled: false } : null;
+  log(st, 'Sen yokken ' + r.days + ' gün geçti.', r.gain >= 0 ? 'good' : 'warn');
+  return Object.assign(r, { capped: mins > maxD, maxD, bonus: st.offlineLast ? st.offlineLast.amt : 0 });
 }
 // (eski) uygulama kapalıyken kazanç tahmini
 function offlineEarn(st, now) {
@@ -1561,7 +1645,7 @@ function fmtK(v) { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) 
 const _endDay = endDay;
 function endDayWrap(st) { corporateDaily(st); _endDay(st); }
 
-root.KZ = { START_REC, simulateAway, offlineEarn, claimOffline, 
+root.KZ = { START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
   DISTRICTS, PROVINCES, PROV, PROFILE, profileOf, provDistricts, comps, SEGS, PRODUCTS, TYPES, ARCH, EQUIP, DECOR, CONCEPTS, WAGES, BANKS, SUPPLY, AGENCIES, RIVALS, STARTS, MONTHS, DAYS, AUD_LABEL,
   newGame, tickHour: function (st) { if (st.over) return; for (const b of st.branches) branchHour(st, b, st.hour); msHour(st); st.hour++; if (st.hour >= 24) { st.hour = 0; endDayWrap(st); msDay(st); } },
   dateOf, dateLabel, monthLabel, weatherLabel, wxOf, WX_N, getListings, refreshListings, inspectListing, listingEstimate, permitsFor, waitDays, conceptsFor, minStaff, defaultChoice, setupCost, openBranch,
