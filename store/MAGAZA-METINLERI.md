@@ -4,7 +4,7 @@
 
 | Alan | Metin | Sınır |
 |---|---|---|
-| Uygulama adı (App Store / Play) | Kafe Zinciri: Kafe Simülasyonu | 30 |
+| Uygulama adı (App Store / Play) | Cafe Simulator: Kafe Zinciri | 30 |
 | Alt başlık (App Store) | Türkiye'de kafe zinciri kur | 30 |
 | Kısa açıklama (Play) | 81 ilde dükkan aç, menünü belirle, rakiplerini geç: kendi kafe zincirini kur. | 80 |
 | Tanıtım metni (App Store) | Ramazan'da Konya'da ciro düşer, Kurban'da İstanbul boşalır. Doğru semti seç, zincirini büyüt. | 170 |
@@ -14,7 +14,7 @@
 
 Kendi kafeni aç, Türkiye'nin en büyük kafe zincirini kur.
 
-Kafe Zinciri, Türkiye'de gerçekçi bir kafe işletmeciliği simülasyonu. 81 ilin gerçek ilçelerinde dükkan kiralar, menünü ve fiyatlarını belirler, personelini yönetir, rakiplerinle yarışırsın. Her kararın kasana yansır.
+Cafe Simulator, Türkiye'de gerçekçi bir kafe işletmeciliği simülasyonu. 81 ilin gerçek ilçelerinde dükkan kiralar, menünü ve fiyatlarını belirler, personelini yönetir, rakiplerinle yarışırsın. Her kararın kasana yansır.
 
 GERÇEK TÜRKİYE
 • 81 il ve gerçek ilçe sınırları; her semtin kendi kirası, yaya trafiği, öğrenci ve ofis yoğunluğu
