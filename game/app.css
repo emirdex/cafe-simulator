@@ -1386,3 +1386,10 @@ tr.pslide td { background: var(--accent-soft); padding: 10px 12px; }
 .newconf b { font-size: 13px; font-weight: 600; } .newconf small { font-size: 11px; color: var(--muted); line-height: 1.4; }
 .newconf .row { justify-content: flex-end; gap: 8px; }
 .savecard.prev { opacity: .8; } .savecard.prev .sv-t { padding-left: 4px; }
+
+/* sahne etiketleri tabelanın üstüne binmesin: tabela satırı boş kalır, etiketler bir alt sıradan başlar */
+.scene .chip { top: 46px; }
+.wxchip { top: 80px; }
+.scene .go { top: 44px; }
+.scene .adbtn.onscene.gift { top: 82px; }
+.scene .adbtn.onscene:not(.gift) { top: 118px; }
