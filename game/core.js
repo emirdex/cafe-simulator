@@ -864,7 +864,9 @@ function useTicket(st, bid) { const S = iapState(st), b = st.branches.find(x => 
 
 /* ---------- ödüllü reklamlar ---------- */
 // sınırlar gerçek güne göre (mağaza oyunlarındaki gibi); ödüller küçük tutuldu
-const AD_CAP = { offline: 4, ruhsat: 4, ilan: 3, incele: 3, ariza: 2, aybonus: 3, ihtar: 1, gunluk: 1, moral: 2 };
+const AD_CAP = { offline: 4, ruhsat: 4, ilan: 3, incele: 3, ariza: 2, aybonus: 3, ihtar: 1, gunluk: 1, moral: 2, aysonu: 3, hiz: 2, tadilat: 3, avmyer: 2, kacan: 1 };
+const FAST_AD_MS = 15 * 60000; // reklamla açılan geçici hızlı mod süresi
+function fastActive(st) { return !!(st.iap && st.iap.fast) || (st.fastUntil || 0) > clockFn(); }
 const AD_TOTAL = 15;
 function adDay() { const d = new Date(clockFn()); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
 function adState(st) { const k = adDay(); if (!st.ads || st.ads.day !== k) st.ads = { day: k, n: {}, tot: 0 }; return st.ads; }
@@ -884,6 +886,11 @@ function adReward(st, kind, arg) {
   else if (kind === 'gunluk') { const v = dailyGift(st); st.cash += v; st.month.extra += v; earnGold(st, 3); msg = 'Günlük ödül: ' + fmt(v) + ' + 3 Altın.'; }
   else if (kind === 'moral') { const b = st.branches.find(x => x.id === arg); if (!b) return { ok: false }; b.moral = Math.min(100, b.moral + 12); msg = 'Ekibe ikram: moral +12.'; }
   else if (kind === 'ariza') { msg = 'Servis ücretsiz geldi.'; }
+  else if (kind === 'aysonu') { msg = 'Ay sonuna geçiliyor.'; }
+  else if (kind === 'hiz') { st.fastUntil = Math.max(st.fastUntil || 0, clockFn()) + FAST_AD_MS; st.speed = 2; st.paused = false; msg = '15 dakika boyunca oyun 2 kat hızlı.'; }
+  else if (kind === 'tadilat') { const b = st.branches.find(x => x.id === arg); if (!b || b.closedUntil < st.day) return { ok: false }; b.closedUntil = st.day - 1; msg = b.name + ': ekip işi bitirdi, şube yeniden açık.'; }
+  else if (kind === 'avmyer') { const v = mallVac(st, arg); if (v.n) return { ok: false }; v.n = 1; v.until = st.day + ri(st, 15, 40); delete st.listings['M:' + arg]; msg = 'Yönetim haber verdi: bir dükkan boşaldı.'; }
+  else if (kind === 'kacan') { const o = st.offlineMissed; if (!o || o.got) return { ok: false }; o.got = true; st.cash += o.amt; st.month.extra += o.amt; msg = 'Kaçırdığın günlerden +' + fmt(o.amt) + ' kasaya geçti.'; }
   adMark(st, kind); return { ok: true, msg };
 }
 
@@ -996,8 +1003,11 @@ function simulateAway(st, now) {
   const hours = Math.min(maxD * 24, Math.floor(mins * 24)); if (hours < 24) return null;
   const r = advanceHours(st, hours);
   st.offlineLast = r.gain > 0 ? { amt: Math.round(r.gain * .5 / 500) * 500, doubled: false } : null;
+  // sınırın ötesinde kaçırılan günler: reklamla bunların yarısı kadar kazanç alınabilir (en fazla sınır kadar gün)
+  const missD = Math.min(maxD, Math.floor(mins) - maxD);
+  st.offlineMissed = r.gain > 0 && r.days > 0 && missD >= 1 ? { amt: Math.round(r.gain / r.days * missD * .5 / 500) * 500, days: missD, got: false } : null;
   log(st, 'Sen yokken ' + r.days + ' gün geçti.', r.gain >= 0 ? 'good' : 'warn');
-  return Object.assign(r, { capped: mins > maxD, maxD, bonus: st.offlineLast ? st.offlineLast.amt : 0 });
+  return Object.assign(r, { capped: mins > maxD, maxD, bonus: st.offlineLast ? st.offlineLast.amt : 0, missed: st.offlineMissed ? st.offlineMissed.amt : 0, missedDays: st.offlineMissed ? st.offlineMissed.days : 0 });
 }
 // (eski) uygulama kapalıyken kazanç tahmini
 function offlineEarn(st, now) {
@@ -1673,7 +1683,7 @@ function fmtK(v) { const a = Math.abs(v), s = v < 0 ? '−' : ''; if (a >= 1e6) 
 const _endDay = endDay;
 function endDayWrap(st) { corporateDaily(st); _endDay(st); }
 
-root.KZ = { suggestPrice, takeLoan, setClock, clockNow, START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
+root.KZ = { fastActive, suggestPrice, takeLoan, setClock, clockNow, START_REC, simulateAway, advanceHours, GSHOP, SLOCS, SKINS, PTHEMES, goldBuy, earnGold, weekEnds,  offlineEarn, claimOffline, 
   DISTRICTS, PROVINCES, PROV, PROFILE, profileOf, provDistricts, comps, SEGS, PRODUCTS, TYPES, ARCH, EQUIP, DECOR, CONCEPTS, WAGES, BANKS, SUPPLY, AGENCIES, RIVALS, STARTS, MONTHS, DAYS, AUD_LABEL,
   newGame, tickHour: function (st) { if (st.over) return; for (const b of st.branches) branchHour(st, b, st.hour); msHour(st); st.hour++; if (st.hour >= 24) { st.hour = 0; endDayWrap(st); msDay(st); } },
   dateOf, dateLabel, monthLabel, weatherLabel, wxOf, WX_N, getListings, refreshListings, inspectListing, listingEstimate, permitsFor, waitDays, conceptsFor, minStaff, defaultChoice, setupCost, openBranch,

@@ -1370,3 +1370,13 @@ tr.pslide td { background: var(--accent-soft); padding: 10px 12px; }
 .psval { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 72px; }
 .psval b { font-size: 15px; font-weight: 600; }
 .sheet .sact { position: sticky; bottom: -12px; margin-bottom: -12px; padding: 10px 0 12px; background: linear-gradient(to bottom, transparent, var(--bg) 14px); z-index: 2; }
+
+/* reklamla zaman atlatma: 2x deneme, kalan süre, ay sonuna geç */
+.screen .hspeed button.hadfast { width: auto; padding: 0 8px; display: flex; align-items: center; gap: 4px; color: #8fb7e8; font-size: 11.5px; font-weight: 600; }
+.hpill.hcd { gap: 6px; padding: 0 10px; }
+.hpill.hcd span { font-size: 11px; font-weight: 600; color: #8fb7e8; }
+.hpill.hcd b { font-size: 12px; }
+.hpill.hskip { gap: 6px; padding: 0 10px; cursor: pointer; border-color: color-mix(in srgb, #8fb7e8 45%, var(--line)); color: var(--text); font: inherit; background: var(--panel); }
+.hpill.hskip span { font-size: 11.5px; font-weight: 500; white-space: nowrap; }
+.hpill.hskip small { font-size: 10px; color: var(--muted); white-space: nowrap; }
+@media (max-width: 760px) { .hpill.hskip small { display: none; } }

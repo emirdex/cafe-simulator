@@ -471,8 +471,8 @@ function hud() {
     <div class="hpill rep" title="Marka itibarı"><span class="star">${I('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>')}</span><b class="num">${rep}</b></div>
     <div class="hspeed" role="group" aria-label="Oyun hızı">
       <button class="${sp === 0 ? 'on' : ''}" data-a="speed" data-v="0" aria-label="Duraklat">${I('<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>')}</button>
-      <button class="${sp && !(st.speed === 2 && st.iap && st.iap.fast) ? 'on' : ''}" data-a="speed" data-v="1" aria-label="Oynat">${I('<path d="M8 5l11 7-11 7z"/>')}</button>${st.iap && st.iap.fast ? `<button class="${sp && st.speed === 2 ? 'on' : ''}" data-a="speed" data-v="2" aria-label="2 kat hız">${I('<path d="M4 5l8 7-8 7zM12 5l8 7-8 7z"/>')}</button>` : ''}
-    </div>
+      <button class="${sp && !(st.speed === 2 && K.fastActive(st)) ? 'on' : ''}" data-a="speed" data-v="1" aria-label="Oynat">${I('<path d="M8 5l11 7-11 7z"/>')}</button>${K.fastActive(st) ? `<button class="${sp && st.speed === 2 ? 'on' : ''}" data-a="speed" data-v="2" aria-label="2 kat hız">${I('<path d="M4 5l8 7-8 7zM12 5l8 7-8 7z"/>')}</button>` : monetOn() && K.adLeft(st, 'hiz') && st.branches.length ? `<button class="hadfast" data-a="ad" data-k="hiz" data-v="" aria-label="Reklam izle, 15 dakika 2 kat hız">${ADI}<span>2x</span></button>` : ''}
+    </div>${!(st.iap && st.iap.fast) && (st.fastUntil || 0) > K.clockNow() ? `<div class="hpill hcd" data-cd="${st.fastUntil}" title="Reklamla açılan hızlı mod"><span>2x</span><b class="num">${cdTxt(st.fastUntil - K.clockNow())}</b></div>` : ''}${monthSkipBtn()}
     ${monetOn() ? '' : '<!--'}<button class="ibtn shopb2" data-a="shop" aria-label="Mağaza">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</button>${monetOn() ? '' : '-->'}
     <button class="ibtn" data-a="settings" aria-label="Ayarlar">${IC.gear}</button>
   </header>`;
@@ -646,7 +646,7 @@ function mallPanel(mid) {
     <div class="mallkpi"><div><span class="lbl">Büyüklük</span><b>${S.n}</b></div><div><span class="lbl">Ziyaretçi</span><b>${m.s === 3 ? 'Çok yüksek' : m.s === 2 ? 'Yüksek' : 'Orta'}</b></div><div><span class="lbl">Hafta sonu</span><b class="pos">+%60</b></div><div><span class="lbl">Boş yer</span><b>${lock.length ? '—' : v.n}</b></div></div>
     <p class="muted" style="margin:0;font-size:10.5px">${opening ? 'AVM ' + (m.openDay - st.day) + ' gün sonra açılıyor; şimdi kiralarsan açılışta hazır olursun. ' : ''}${isNew ? 'Açılış döneminde ziyaretçi %25 fazla, ilk 6 ay kira yarı fiyatına. ' : ''}AVM'de hava etkilemez, cumartesi ve pazar ziyaretçi artar. Kiranın yanında cirodan pay ödenir.${own.length ? ' Burada ' + own.length + ' şuben var.' : ''}</p></div>`;
   if (lock.length) return h + `<div class="lockbox"><b>AVM'de dükkan açmak için</b><ul>${lock.map(x => '<li>' + esc(x) + '</li>').join('')}</ul></div>`;
-  if (!ls.length) return h + `<div class="lockbox calm"><b>Şu an boş yer yok</b><p style="margin:4px 0 0">Dükkanlar dönem dönem el değiştiriyor. Yaklaşık ${Math.max(1, v.until - st.day)} gün sonra tekrar bak.</p></div>`;
+  if (!ls.length) return h + `<div class="lockbox calm"><b>Şu an boş yer yok</b><p style="margin:4px 0 0">Dükkanlar dönem dönem el değiştiriyor. Yaklaşık ${Math.max(1, v.until - st.day)} gün sonra tekrar bak.</p>${adBtn('avmyer', 'Reklam izle · yönetimden haber al, bir yer açılsın', mid)}</div>`;
   return h + `<div class="row between"><span class="muted" style="font-size:10.5px">${ls.length} boş yer</span><button class="btn sm" data-a="compare">Karşılaştır</button></div>` + ls.map(listingCard).join('');
 }
 function mallGroupPanel(ids) {
@@ -815,7 +815,7 @@ function vBranch() {
   const body = { ozet: bOzet, menu: bMenu, personel: bPersonel, dukkan: bDukkan }[ui.btab](b);
   return `<div class="bhd"><button class="ibtn" data-a="nav" data-v="branches" aria-label="Şubeler">${I('<path d="M15 6l-6 6 6 6"/>')}</button>
     <div class="bht"><h1>${esc(b.name)}</h1><div class="bmeta"><span>${typeName(b.type)}</span><span>${esc(K.PROV[DISTRICTS[b.d].p].n)} · ${esc(DISTRICTS[b.d].n)}</span><span>${esc(b.archN || ARCH[b.arch].n)}</span><span class="num">${b.area} m²</span></div></div>
-    <div class="bhr">${statusPill(b)}<span class="rate"><span class="stars">${'★'.repeat(Math.round(b.rating))}<i>${'★'.repeat(5 - Math.round(b.rating))}</i></span><b class="num">${b.rating.toFixed(1)}</b></span></div></div>
+    <div class="bhr">${statusPill(b)}${b.status === 'acik' && b.closedUntil >= st.day ? adBtn('tadilat', 'Reklam izle · ekip hemen bitirsin', b.id, 'sm') : ''}<span class="rate"><span class="stars">${'★'.repeat(Math.round(b.rating))}<i>${'★'.repeat(5 - Math.round(b.rating))}</i></span><b class="num">${b.rating.toFixed(1)}</b></span></div></div>
     <div class="segt" role="tablist">${tb.map(([k, n]) => `<button role="tab" aria-selected="${ui.btab === k}" class="${ui.btab === k ? 'on' : ''}" data-a="btab" data-v="${k}">${n}</button>`).join('')}</div>${body}`;
 }
 const SEGC = { ogrenci: '#86a8e7', ofis: '#d4b26a', uzaktan: '#7ee8c6', grup: '#f7b267', aile: '#ff8fb1', elit: '#c7a7e8', turist: '#4fc3f7', beyazyaka: '#ffb38a', macsever: '#9be15d' };
@@ -1236,7 +1236,7 @@ function renderLayer() {
   if (window.KZUpdate && ui.upd !== 'done' && !ui.setup) { const u = window.KZUpdate;
     layer.innerHTML = wrap(`<div class="sheet sm offl"><div class="offic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 19h14"/></svg></div><span class="lbl">Güncelleme</span><h2>Yeni sürüm var · ${esc(u.version)}</h2>${u.notes ? `<p class="muted" style="white-space:pre-line;text-align:left;max-width:360px">${esc(u.notes)}</p>` : '<p class="muted">Yeni özellikler ve düzeltmeler için güncelle.</p>'}<div class="row" style="justify-content:center;gap:8px"><button class="gold" data-a="updnow">Güncelle ${IC.next}</button>${u.force ? '' : '<button class="btn" data-a="updlater">Sonra</button>'}</div></div>`); return; }
   if (ui.offline) { const o = ui.offline, pos = o.gain >= 0;
-    layer.innerHTML = wrap(`<div class="sheet sm offl"><div class="offic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></div><span class="lbl">Sen yokken</span><h2>${o.days} gün geçti</h2><div class="offamt num ${pos ? '' : 'neg'}">${pos ? '+' : '−'}${fmt(Math.abs(o.gain))}</div><p class="muted">Kasa değişimi · ${fmtK(o.rev)} ciro · ${Math.round(o.cust).toLocaleString('tr-TR')} müşteri${o.capped ? '<br>Oyun kapalıyken en fazla 1 ay ilerler.' : ''}</p><div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px"><button class="gold" data-a="offok">Devam ${IC.next}</button>${o.bonus ? adBtn('offline', 'Reklam izle · +' + fmtK(o.bonus) + ' yatırımcı primi', '') : ''}</div></div>`); return; }
+    layer.innerHTML = wrap(`<div class="sheet sm offl"><div class="offic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></div><span class="lbl">Sen yokken</span><h2>${o.days} gün geçti</h2><div class="offamt num ${pos ? '' : 'neg'}">${pos ? '+' : '−'}${fmt(Math.abs(o.gain))}</div><p class="muted">Kasa değişimi · ${fmtK(o.rev)} ciro · ${Math.round(o.cust).toLocaleString('tr-TR')} müşteri${o.capped ? '<br>Oyun kapalıyken en fazla 1 ay ilerler.' : ''}</p><div class="row" style="justify-content:center;flex-wrap:wrap;gap:8px"><button class="gold" data-a="offok">Devam ${IC.next}</button>${o.bonus ? adBtn('offline', 'Reklam izle · +' + fmtK(o.bonus) + ' yatırımcı primi', '') : ''}${o.missed && st.offlineMissed && !st.offlineMissed.got ? adBtn('kacan', 'Reklam izle · kaçırdığın ' + o.missedDays + ' günün yarısı: +' + fmtK(o.missed), '') : ''}</div></div>`); return; }
   drainQuiet(); const ev = K.nextEvent(st);
   if (ev) {
     if (ev.k === 'rapor' && !prefs().report) { st.queue.shift(); return renderLayer(); }
@@ -1285,7 +1285,7 @@ document.addEventListener('click', e => {
     case 'gomap': ui.view = 'map'; ui.type = 'kafe'; if (v) { ui.sel = v; ui.prov = DISTRICTS[v].p; ui.mapLevel = 'prov'; const pv = provView(ui.prov); setMV({ x: pv[0] - pv[2] / 2, y: pv[1] - pv[2] * dims().h / dims().w / 2, w: pv[2] }); } else { ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; setMV(Object.assign({}, MVDEF.tr)); } break;
     case 'prov': { if (ui._dragged) { ui._dragged = false; return; } ui.sel = null; ui.mall = null; ui.mallGroup = null; if (!v) { ui.prov = null; flyTo('tr', TRV[0] + TRV[2] / 2, TRV[1] + TRV[3] / 2, TRV[2]); return; } ui.prov = v; const pv = provView(v); flyTo('prov', pv[0], pv[1], pv[2]); return; }
     case 'level': ui.sel = null; ui.prov = null; ui.mall = null; ui.mallGroup = null; flyTo('tr', TRV[0] + TRV[2] / 2, TRV[1] + TRV[3] / 2, TRV[2]); return;
-    case 'speed': if (+v === 0) st.paused = true; else { st.paused = false; st.speed = +v === 2 && st.iap && st.iap.fast ? 2 : 1; } break;
+    case 'speed': if (+v === 0) st.paused = true; else { st.paused = false; st.speed = +v === 2 && K.fastActive(st) ? 2 : 1; } break;
     case 'settings': ui.settings = true; break;
     case 'closesettings': ui.settings = false; ui.confirm = null; break;
     case 'pref': { const P = prefs(); if (v === 'notif') { P.notif = P.notif === false; if (P.notif) askNotifPerm(); } else P[v] = !P[v]; save(); renderLayer(); return; }
@@ -1369,7 +1369,7 @@ document.addEventListener('click', e => {
     case 'updnow': { const u = window.KZUpdate; ui.upd = 'done'; if (u && u.open) u.open(); render(); return; }
     case 'updlater': { ui.upd = 'done'; render(); return; }
     case 'offok': { ui.offline = null; render(); return; }
-    case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral') arg = +v; if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
+    case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral' || k === 'tadilat') arg = +v; if (k === 'aysonu') { const to = st.day + daysToMonthEnd(); runAd(k, null, () => { ui.skipTo = to; st.paused = false; }); return; } if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
     case 'evok': { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') { const r = st.reports[ev.r] || st.reports[st.reports.length - 1]; if (r && r.profit > 0) askReview('karli-ay'); } if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
     case 'evfin': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, 0); ui.view = 'finance'; ui.rep = null; break; }
     case 'forcedsell': K.forcedTransfer(st, +v); save(); break;
@@ -1605,6 +1605,12 @@ function buyMock(it) {
 // Mobil sürümde window.KZAds.showRewarded(yer) AdMob/AppLovin ödüllü videosunu açıp Promise<boolean> döndürür.
 const ADI = '<svg class="adi" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5v5l4.5-2.5z"/></svg>';
 function monetOn() { return !!(st && (st.branches.some(b => b.status === 'acik') || st.reports.length)); }
+function daysToMonthEnd() { const m = K.dateOf(st.day).getUTCMonth(); let n = 1; while (n < 40 && K.dateOf(st.day + n).getUTCMonth() === m) n++; return n; }
+function monthSkipBtn() {
+  if (!st || !monetOn() || ui.skipTo || !st.branches.length || !K.adLeft(st, 'aysonu')) return '';
+  const n = daysToMonthEnd(); if (n > 7) return '';
+  return `<button class="hpill hskip" data-a="ad" data-k="aysonu" data-v="" title="Reklam izle, ${n} gün ileri sar">${ADI}<span>Ay sonuna geç</span><small>${n} gün</small></button>`;
+}
 function adBtn(kind, label, v, extra) { if (!monetOn()) return ''; const left = K.adLeft(st, kind); if (!left) return ''; return `<button class="adbtn ${extra || ''}" data-a="ad" data-k="${kind}" data-v="${v == null ? '' : v}">${ADI}<span>${label}</span></button>`; }
 function showAd(kind) {
   if (K.iapState(st).noads) return Promise.resolve(true);
@@ -1650,14 +1656,19 @@ let acc = 0, last = performance.now();
 function loop(now) {
   const dt = Math.min(1000, now - last); last = now;
   if (st && !blocking() && !st.over) {
-    if (ui.ffwd) {
+    if (ui.skipTo) { // reklamla ay sonuna atlama: olaylar çıkarsa durur, kapanınca devam eder
+      let n = 0; while (st.day < ui.skipTo && n++ < 36 && !blocking()) K.tickHour(st);
+      if (st.day >= ui.skipTo) { ui.skipTo = null; save(); }
+      acc = 0; ui._keepScroll = true;
+      if (!ui.skipTo || blocking()) render(); else liveRender(true); // rapor/olay çıktıysa hemen göster
+    } else if (ui.ffwd) {
       const day = st.day; let n = 0;
       while (st.day === day && n++ < 30 && !blocking()) K.tickHour(st);
       if (st.day !== day || blocking()) { ui.ffwd = false; save(); }
-      acc = 0; ui._keepScroll = true; liveRender();
+      acc = 0; ui._keepScroll = true; if (blocking()) render(); else liveRender();
     } else if (!st.paused) {
       acc += dt; let ticked = false, guard = 0;
-      const MSH = MS_PER_HOUR / (st.speed === 2 && st.iap && st.iap.fast ? 2 : 1); let dch = false; while (acc >= MSH && guard++ < 50) { acc -= MSH; const day = st.day; K.tickHour(st); ticked = true; if (st.day !== day) { save(); dch = true; } if (blocking()) { acc = 0; break; } }
+      const MSH = MS_PER_HOUR / (st.speed === 2 && K.fastActive(st) ? 2 : 1); let dch = false; while (acc >= MSH && guard++ < 50) { acc -= MSH; const day = st.day; K.tickHour(st); ticked = true; if (st.day !== day) { save(); dch = true; } if (blocking()) { acc = 0; break; } }
       if (ticked) { liveRender(dch); coinPop(); } else if (ui._pendingLive && performance.now() - (ui._touchAt || 0) > 1500) liveRender(true); ambience();
     }
   }
