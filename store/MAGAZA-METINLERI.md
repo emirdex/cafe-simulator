@@ -18,7 +18,7 @@ Cafe Simulator, Türkiye'de gerçekçi bir kafe işletmeciliği simülasyonu. 81
 
 GERÇEK TÜRKİYE
 • 81 il ve gerçek ilçe sınırları; her semtin kendi kirası, yaya trafiği, öğrenci ve ofis yoğunluğu
-• İstanbul, Ankara ve İzmir'deki gerçek AVM'ler; hafta sonu kalabalığı ve yeni açılan AVM fırsatları
+• İstanbul, Ankara ve İzmir'de AVM'ler; hafta sonu kalabalığı ve yeni açılan AVM fırsatları
 • Ramazan'da muhafazakâr şehirlerde ciro düşer, Kurban Bayramı'nda büyük şehirler boşalır
 • Mevsime ve şehre göre hava: yağmurlu günde müşteri azalır, yazın soğuk kahve satar
 

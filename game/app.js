@@ -1152,6 +1152,9 @@ function migrate(st) {
   const map = { ank: '06', izm: '35', ant: '07', brs: '16', mug: '48' };
   for (const b of st.branches) { if (DISTRICTS[b.d]) continue; let code = /^[pd]\d\d/.test(b.d) ? b.d.slice(1, 3) : map[b.d.slice(0, 3)]; const ds = code ? K.provDistricts(code) : []; const c = ds.find(id => DISTRICTS[id].central) || ds[0]; b.d = c || 'kartal'; K.computeOffer(st, b); }
   for (const k in st.listings) if (!DISTRICTS[k.split(':')[0]]) delete st.listings[k];
+  // AVM adları değişti: eski kayıtlardaki şube ve ilan adlarını güncel adla yenile
+  for (const b of st.branches) { if (!b.mall || !b.archN) continue; const m = K.mallById(st, b.mall); const i = b.archN.indexOf(' · '); if (m && i > 0) b.archN = b.archN.slice(0, i) + ' · ' + m.n; }
+  for (const k in st.listings) if (k.startsWith('M:')) delete st.listings[k];
 }
 /* ---------- ayarlar ---------- */
 function prefs() { st.prefs = st.prefs || { report: true, coins: true, cashFull: false }; return st.prefs; }
@@ -1406,11 +1409,45 @@ document.addEventListener('pointermove', e => { const card = $('#mapcard'); if (
   else { const d = DISTRICTS[id]; const lk = K.districtLock(st, id).length > 0; html = `<b>${esc(d.n)}</b><span><i style="background:${PROFF[d.prof]}"></i>${K.PROFILE[d.prof].n}${lk ? ' · kilitli' : ''}</span>`; }
   if (tip.innerHTML !== html) tip.innerHTML = html; const r = card.getBoundingClientRect(), sc = r.width / card.offsetWidth;
   tip.style.left = ((e.clientX - r.left) / sc + 12) + 'px'; tip.style.top = ((e.clientY - r.top) / sc - 34) + 'px'; tip.style.opacity = 1; });
-/* ---------- harita sürükle / tekerlek ---------- */
-let drag = null;
-document.addEventListener('pointerdown', e => { const svg = e.target.closest && e.target.closest('#mapsvg'); if (!svg) return; const r = svg.getBoundingClientRect(); const mv = mapView(); drag = { x: e.clientX, y: e.clientY, mv: Object.assign({}, mv), k: mv.w / r.width, moved: false }; });
-document.addEventListener('pointermove', e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; if (!drag.moved) return; const nv = { x: drag.mv.x - dx * drag.k, y: drag.mv.y - dy * drag.k, w: drag.mv.w }; setMV(nv); const D = dims(); const svg = $('#mapsvg'); if (svg) svg.setAttribute('viewBox', nv.x + ' ' + nv.y + ' ' + nv.w + ' ' + (nv.w * D.h / D.w)); });
-document.addEventListener('pointerup', () => { if (drag && drag.moved) { ui._dragged = true; setTimeout(() => { ui._dragged = false; }, 50); } drag = null; });
+/* ---------- harita sürükle / iki parmakla yakınlaştır / tekerlek ----------
+   Hareket sırasında SVG yeniden çizilmez: CSS transform (GPU) ile kaydırılır ve ölçeklenir,
+   parmak kalkınca yeni görünüm viewBox'a yazılır ve etiketler bir kez yeniden çizilir. */
+let drag = null; const ptrs = new Map(); let gst = null, graf = 0;
+const MV_MIN = 320;
+function gStart(svg) {
+  const r = svg.getBoundingClientRect(); const mv = Object.assign({}, mapView()); const D = dims(); const mh = mv.w * D.h / D.w;
+  const sc = Math.min(r.width / mv.w, r.height / mh); const ox = (r.width - mv.w * sc) / 2, oy = (r.height - mh * sc) / 2;
+  const pts = [...ptrs.values()];
+  const c = pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2, d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1 } : { x: pts[0].x, y: pts[0].y, d: 1 };
+  gst = { svg, r, mv, mh, sc, ox, oy, c0: c, n: pts.length, tx: 0, ty: 0, s: 1, sMin: mv.w / D.w, sMax: mv.w / MV_MIN };
+  svg.style.transformOrigin = '0 0'; svg.style.willChange = 'transform';
+}
+function gMove() {
+  if (!gst) return; const pts = [...ptrs.values()]; const g = gst;
+  if (pts.length > 1 && g.n > 1) { const m = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }; const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    g.s = Math.max(g.sMin, Math.min(g.sMax, d / g.c0.d)); g.tx = m.x - g.r.left - g.s * (g.c0.x - g.r.left); g.ty = m.y - g.r.top - g.s * (g.c0.y - g.r.top); }
+  else { g.s = 1; g.tx = pts[0].x - g.c0.x; g.ty = pts[0].y - g.c0.y; }
+  if (!graf) graf = requestAnimationFrame(() => { graf = 0; if (gst) gst.svg.style.transform = `translate(${gst.tx}px,${gst.ty}px) scale(${gst.s})`; });
+}
+// hareketi viewBox'a işler; full: etiket boyutları için ekranı bir kez yeniden çiz
+function gCommit(full) {
+  const g = gst; if (!g) return; gst = null; if (graf) { cancelAnimationFrame(graf); graf = 0; }
+  const D = dims(); const ss = g.sc * g.s;
+  const nv = { x: g.mv.x - g.tx / ss - g.ox / g.sc + g.ox / ss, y: g.mv.y - g.ty / ss - g.oy / g.sc + g.oy / ss, w: g.mv.w / g.s };
+  setMV(nv); g.svg.style.transform = ''; g.svg.style.willChange = '';
+  g.svg.setAttribute('viewBox', nv.x + ' ' + nv.y + ' ' + nv.w + ' ' + (nv.w * D.h / D.w));
+  if (full && Math.abs(g.s - 1) > .01) render();
+}
+document.addEventListener('pointerdown', e => { const svg = e.target.closest && e.target.closest('#mapsvg'); if (!svg) return;
+  if (gst) gCommit(false); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size > 2) return;
+  if (!drag) drag = { x: e.clientX, y: e.clientY, moved: false }; else drag.moved = true; gStart(svg); });
+document.addEventListener('pointermove', e => { if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (drag && !drag.moved && Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 4) drag.moved = true;
+  if (drag && drag.moved) gMove(); });
+function gEnd(e) { if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId);
+  if (ptrs.size) { gCommit(false); const svg = $('#mapsvg'); if (svg) gStart(svg); return; }
+  const moved = drag && drag.moved; gCommit(true); if (moved) { ui._dragged = true; setTimeout(() => { ui._dragged = false; }, 50); } drag = null; }
+document.addEventListener('pointerup', gEnd); document.addEventListener('pointercancel', gEnd);
 document.addEventListener('wheel', e => { const svg = e.target.closest && e.target.closest('#mapsvg'); if (!svg) return; e.preventDefault(); const mv = mapView(), D = dims(); const r = svg.getBoundingClientRect(); const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height; const h = mv.w * D.h / D.w; const nw = Math.max(320, Math.min(D.w, mv.w * (e.deltaY < 0 ? .85 : 1.18))); const nh = nw * D.h / D.w; setMV({ x: mv.x + (mv.w - nw) * px, y: mv.y + (h - nh) * py, w: nw }); render(); }, { passive: false });
 
 /* ---------- para baloncukları ---------- */
