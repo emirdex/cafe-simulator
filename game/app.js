@@ -36,7 +36,7 @@ function backupPrev() { try { const cur = localStorage.getItem(SAVE); if (cur) l
 function continueGame() {
   const s0 = loadSave(); if (!s0) return false;
   try { st = s0; migrate(st); } catch (e) { st = null; if (window.KZCrash) window.KZCrash.log('kayıt yüklenemedi: ' + e.message); return false; }
-  st.paused = true; checkOffline(); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return true;
+  st.paused = false; checkOffline(); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return true;
 }
 function loadSave() { try { const s = localStorage.getItem(SAVE); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function clearSave() { try { localStorage.removeItem(SAVE); } catch (e) {} }
@@ -69,10 +69,12 @@ const TIC = {
 };
 /* ---------- küçük görseller ---------- */
 function stars(r) { const f = Math.round(r); let s = ''; for (let i = 1; i <= 5; i++) s += i <= f ? '★' : '☆'; return '<span class="stars">' + s + '</span> <span class="num muted">' + r.toFixed(1) + '</span>'; }
-function spark(vals, h) {
+function spark(vals, h, fit) {
   h = h || 34;
   if (vals.length < 2) return '<svg class="spark" viewBox="0 0 100 ' + h + '"></svg>';
-  const max = Math.max(...vals), min = Math.min(0, ...vals), n = vals.length, rng = Math.max(1, max - min);
+  // fit: ölçek sıfırdan değil verinin kendi aralığından başlar (kasa gibi büyük ve az oynayan değerler düz çizgi olmasın)
+  let max = Math.max(...vals), min = fit ? Math.min(...vals) : Math.min(0, ...vals); if (fit) { const pad = Math.max((max - min) * .15, Math.abs(max) * .02, 1); max += pad; min -= pad; }
+  const n = vals.length, rng = Math.max(1, max - min);
   const pts = vals.map((v, i) => [i / (n - 1) * 100, h - 3 - (v - min) / rng * (h - 6)]);
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
   return '<svg class="spark" style="height:' + h + 'px" viewBox="0 0 100 ' + h + '" preserveAspectRatio="none"><path class="a" d="' + d + ' L100 ' + h + ' L0 ' + h + ' Z"/><path class="l" d="' + d + '" vector-effect="non-scaling-stroke"/></svg>';
@@ -479,7 +481,7 @@ function hud() {
     <div class="hpill rep" title="Marka itibarı"><span class="star">${I('<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>')}</span><b class="num">${rep}</b></div>
     <div class="hspeed" role="group" aria-label="Oyun hızı">
       <button class="${sp === 0 ? 'on' : ''}" data-a="speed" data-v="0" aria-label="Duraklat">${I('<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>')}</button>
-      <button class="${sp && !(st.speed === 2 && K.fastActive(st)) ? 'on' : ''}" data-a="speed" data-v="1" aria-label="Oynat">${I('<path d="M8 5l11 7-11 7z"/>')}</button>${K.fastActive(st) ? `<button class="${sp && st.speed === 2 ? 'on' : ''}" data-a="speed" data-v="2" aria-label="2 kat hız">${I('<path d="M4 5l8 7-8 7zM12 5l8 7-8 7z"/>')}</button>` : monetOn() && K.adLeft(st, 'hiz') && st.branches.length ? `<button class="hadfast" data-a="ad" data-k="hiz" data-v="" aria-label="Reklam izle, 15 dakika 2 kat hız">${ADI}<span>2x</span></button>` : ''}
+      <button class="${sp && !(st.speed === 2 && K.fastActive(st)) ? 'on' : ''}" data-a="speed" data-v="1" aria-label="Oynat">${I('<path d="M8 5l11 7-11 7z"/>')}</button>${K.fastActive(st) ? `<button class="${sp && st.speed === 2 ? 'on' : ''}" data-a="speed" data-v="2" aria-label="2 kat hız">${I('<path d="M4 5l8 7-8 7zM12 5l8 7-8 7z"/>')}</button>` : monetOn() && K.adLeft(st, 'hiz') && st.branches.length ? `<button class="hadfast" data-a="ad" data-k="hiz" data-v="" aria-label="Reklam izle, 15 dakika 2 kat hız">${ADI}<span>2x</span></button>${fastTip()}` : ''}
     </div>${!(st.iap && st.iap.fast) && (st.fastUntil || 0) > K.clockNow() ? `<div class="hpill hcd" data-cd="${st.fastUntil}" title="Reklamla açılan hızlı mod"><span>2x</span><b class="num">${cdTxt(st.fastUntil - K.clockNow())}</b></div>` : ''}${monthSkipBtn()}
     ${monetOn() ? '' : '<!--'}<button class="ibtn shopb2" data-a="shop" aria-label="Mağaza">${I('<path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>')}</button>${monetOn() ? '' : '-->'}
     <button class="ibtn" data-a="settings" aria-label="Ayarlar">${IC.gear}</button>
@@ -548,7 +550,7 @@ function vHome() {
     <div class="hr">
       <div class="kasa2">
         <div class="kt"><span class="lbl">Kasa</span><b class="num">${fmt(st.cash)}</b><small>Bu ay ciro ${fmtK(monthRev)}</small></div>
-        <div class="ks">${spark((st.cashHist || []).slice(-30).concat([st.cash]), 46)}</div>
+        ${(st.cashHist || []).length >= 7 ? `<div class="ks">${spark((st.cashHist || []).slice(-30).concat([st.cash]), 46, true)}</div>` : ''}
       </div>
       <div class="arows">
         ${act(b ? 'qbranch' : 'nav', b ? 'menu' : 'map', IC.menu, 'Menü & fiyat', b ? Object.values(b.menu).filter(m => m.on).length + ' ürün' : 'Önce şube aç')}
@@ -771,6 +773,7 @@ function setupSheet() {
       <div class="suchips"><span>${L.area} m²</span><span>${L.tables || 0}${L.hasFront ? '+' + L.frontTables : ''} masa</span><span>${fmtK(L.rent)}/ay</span></div>
       <button class="ibtn" data-a="closesetup" aria-label="Vazgeç"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
     <div class="sugrid"><div class="suleft" id="suleft">
+      ${!st.branches.length ? `<div class="quickopen"><div><b>İlk dükkanın için ayarlar hazır</b><small>Konsept, dekor, ekipman ve personel bu dükkana göre önerildi. Ayrıntılarla uğraşmak istemezsen doğrudan açabilirsin.</small></div><button class="gold" data-a="quickopen">Önerilen ayarlarla aç ${IC.next}</button></div>` : ''}
       <section class="sus"><div class="sush"><span class="n">1</span><b>Şube adı</b></div><input type="text" id="bname" maxlength="30" value="${esc(ch.name)}"></section>
       <section class="sus"><div class="sush"><span class="n">2</span><b>Servis konsepti</b><small>${L.tables <= 4 ? 'Masa az, oturmalı konsept kapalı' : ''}</small></div>
         <div class="ocs c4">${Object.keys(CONCEPTS).map(c => opt('concept', c, ch.concept === c, CONCEPTS[c].n, null, cdesc[c], !cs.includes(c))).join('')}</div></section>
@@ -797,7 +800,7 @@ function setupSheet() {
         <details class="sudet"><summary>Kalem kalem dök</summary>${cost.lines.map(l => `<div class="ln"><span>${esc(l.n)}</span><span class="num">${fmt(l.v)}</span></div>`).join('')}</details>
         <div class="suwait"><span class="wi">${wait ? '⏱' : '✓'}</span><span>${wait === 0 ? 'Ruhsatlar anında tamamlanır' : `Ruhsatlar <b>${wait} gün</b> sürer (~${Math.round(wait * 15)} sn)`}</span></div>
       </div>
-      <div class="sufoot">${after < 0 && loanOpt && loanOpt.o ? `<button class="sucta2 loanc" data-a="loanopen"><span class="t"><b>Kredi çek ve aç</b><small class="num">${fmt(loanOpt.amt)} ${loanOpt.o.n.replace(' kredisi', '')} · ${loanOpt.o.n_} ay · taksit ${fmtK(loanOpt.q.pay)}/ay</small></span><span class="go2">${IC.next}</span></button>` : `<button class="sucta2" data-a="confirmopen" ${after < 0 ? 'disabled' : ''}><span class="t"><b>${after < 0 ? 'Nakit yetersiz' : wait ? 'Kirala, ruhsatları başlat' : 'Kirala ve aç'}</b><small class="num">${fmt(cost.total)}</small></span><span class="go2">${IC.next}</span></button>`}</div>
+      <div class="sufoot">${lossBox()}${after < 0 && loanOpt && loanOpt.o ? `<button class="sucta2 loanc" data-a="loanopen"><span class="t"><b>Kredi çek ve aç</b><small class="num">${fmt(loanOpt.amt)} ${loanOpt.o.n.replace(' kredisi', '')} · ${loanOpt.o.n_} ay · taksit ${fmtK(loanOpt.q.pay)}/ay</small></span><span class="go2">${IC.next}</span></button>` : `<button class="sucta2" data-a="confirmopen" ${after < 0 ? 'disabled' : ''}><span class="t"><b>${after < 0 ? 'Nakit yetersiz' : wait ? 'Kirala, ruhsatları başlat' : 'Kirala ve aç'}</b><small class="num">${fmt(cost.total)}</small></span><span class="go2">${IC.next}</span></button>`}</div>
       ${after < 0 ? (loanOpt && loanOpt.o ? `<small class="muted" style="font-size:10px">Eksik ${fmt(-after)} + 1 aylık sabit gider tamponu. Faiz aylık %${(loanOpt.q.r * 100).toFixed(2)}${fc && fc.profit > 0 ? `; tahmini kâr taksiti ${loanOpt.q.pay < fc.profit ? 'karşılar' : '<b class="neg">karşılamaz</b>'}` : ''}.</small>` : `<small class="muted" style="font-size:10px">${loanOpt ? esc(loanOpt.why) : 'Kredi limiti yetersiz.'} Daha ucuz seçeneklere geçebilirsin.</small>`) : ''}
     </aside></div></div>`;
 }
@@ -1322,7 +1325,7 @@ document.addEventListener('click', e => {
     case 'closesetup': ui.setup = null; ui._keepScroll = true; break;
     case 'ch': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value; ui.setup.ch[el.dataset.k] = v; if (el.dataset.k === 'concept') ui.setup.ch.staff = Math.max(ui.setup.ch.staff, K.minStaff(v, ui.setup.L.tables)); renderLayer(); return; }
     case 'staff': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value; ui.setup.ch.staff = Math.max(1, Math.min(40, ui.setup.ch.staff + +v)); renderLayer(); return; }
-    case 'loanopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const lo = bestLoan(cost - st.cash); if (!lo.o) { toast(lo.why); break; } const lr = K.takeLoan(st, lo.o.id, lo.amt, lo.q.r); if (!lr.ok) { toast(lr.msg); break; } const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { if (st.branches.length === 1) setTimeout(askNotifPerm, 2500); if (st.branches.length >= 3) askReview('3-sube'); ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(fmt(lo.amt) + ' kredi çekildi. ' + r.b.name + (r.b.status === 'acik' ? ' açıldı.' : ' kiralandı.')); sfx('bell'); save(); } else toast(r.msg); break; }
+    case 'loanopen': { if (lossGate(a)) return; const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const lo = bestLoan(cost - st.cash); if (!lo.o) { toast(lo.why); break; } const lr = K.takeLoan(st, lo.o.id, lo.amt, lo.q.r); if (!lr.ok) { toast(lr.msg); break; } const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { if (st.branches.length === 1) setTimeout(askNotifPerm, 2500); if (st.branches.length >= 3) askReview('3-sube'); ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(fmt(lo.amt) + ' kredi çekildi. ' + r.b.name + (r.b.status === 'acik' ? ' açıldı.' : ' kiralandı.')); sfx('bell'); save(); } else toast(r.msg); break; }
     case 'compare': ui.cmp = true; renderLayer(); return;
     case 'shop': ui.shop = true; ui.shopPrev = null; renderLayer(); return;
     case 'setbrand': { if (brandAllowed(v)) { st.brand = Object.assign({}, st.brand || {}, { color: v }); save(); } renderLayer(); return; }
@@ -1337,7 +1340,7 @@ document.addEventListener('click', e => {
     case 'ticket': { const r = K.useTicket(st, +v); toast(r.msg); save(); break; }
     case 'closecmp': ui.cmp = false; render(); return;
     case 'rentcmp': { ui.cmp = false; const L = curListings().find(x => x.id === v); if (L) { ui.setup = { L, ch: K.defaultChoice(st, L) }; ui.setup.ch.name = DISTRICTS[L.did].n; } render(); return; }
-    case 'confirmopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { if (st.branches.length === 1) setTimeout(askNotifPerm, 2500); if (st.branches.length >= 3) askReview('3-sube'); ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(r.b.status === 'acik' ? r.b.name + ' açıldı. Hayırlı olsun!' : r.b.name + ' kiralandı, ruhsatlar bekleniyor.'); save(); } else toast(r.msg); break; }
+    case 'confirmopen': { if (lossGate(a)) return; const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { if (st.branches.length === 1) setTimeout(askNotifPerm, 2500); if (st.branches.length >= 3) askReview('3-sube'); ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(r.b.status === 'acik' ? r.b.name + ' açıldı. Hayırlı olsun!' : r.b.name + ' kiralandı, ruhsatlar bekleniyor.'); save(); } else toast(r.msg); break; }
     case 'branch': ui.branch = +v; ui.view = 'branch'; ui.btab = 'ozet'; ui.confirm = null; break;
     case 'btab': ui.btab = v; ui.confirm = null; break;
     case 'pedit': { ui.pedit = ui.pedit === v ? null : v; ui.pval = null; ui._keepScroll = true; break; }
@@ -1355,6 +1358,8 @@ document.addEventListener('click', e => {
     case 'bconcept': if (v !== b.concept) ui.confirm = { k: 'concept', v }; break;
     case 'doconcept': { const cv = ui.confirm && ui.confirm.v; ui.confirm = null; return res(K.changeConcept(st, b, cv)); }
     case 'cancelconfirm': ui.confirm = null; break;
+    case 'fasttip': prefs().fastTip = true; save(); break;
+    case 'quickopen': { if (!ui.setup) break; const nm = $('#bname'); const name = (nm && nm.value) || ui.setup.ch.name; ui.setup.ch = Object.assign(K.defaultChoice(st, ui.setup.L), { name }); const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const go = document.createElement('button'); go.dataset.a = st.cash >= cost ? 'confirmopen' : 'loanopen'; go.hidden = true; document.body.appendChild(go); go.click(); go.remove(); return; }
     case 'bdecor': return res(K.upgradeDecor(st, b, v));
     case 'bequip': return res(K.upgradeEquip(st, b, v));
     case 'bkitchen': return res(K.addKitchen(st, b));
@@ -1381,7 +1386,7 @@ document.addEventListener('click', e => {
     case 'updnow': { const u = window.KZUpdate; ui.upd = 'done'; if (u && u.open) u.open(); render(); return; }
     case 'updlater': { ui.upd = 'done'; render(); return; }
     case 'offok': { ui.offline = null; render(); return; }
-    case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral' || k === 'tadilat') arg = +v; if (k === 'aysonu') { const to = st.day + daysToMonthEnd(); runAd(k, null, () => { ui.skipTo = to; st.paused = false; }); return; } if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
+    case 'ad': { const k = el.dataset.k; if (k === 'hiz') prefs().fastTip = true; let arg = v; if (k === 'ruhsat' || k === 'moral' || k === 'tadilat') arg = +v; if (k === 'aysonu') { const to = st.day + daysToMonthEnd(); runAd(k, null, () => { ui.skipTo = to; st.paused = false; }); return; } if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
     case 'evok': { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') { const r = st.reports[ev.r] || st.reports[st.reports.length - 1]; if (r && r.profit > 0) askReview('karli-ay'); } if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
     case 'evfin': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, 0); ui.view = 'finance'; ui.rep = null; break; }
     case 'forcedsell': K.forcedTransfer(st, +v); save(); break;
@@ -1622,6 +1627,23 @@ function monthSkipBtn() {
   if (!st || !monetOn() || ui.skipTo || !st.branches.length || !K.adLeft(st, 'aysonu')) return '';
   const n = daysToMonthEnd(); if (n > 7) return '';
   return `<button class="hpill hskip" data-a="ad" data-k="aysonu" data-v="" title="Reklam izle, ${n} gün ileri sar">${ADI}<span>Ay sonuna geç</span><small>${n} gün</small></button>`;
+}
+// tahmini aylık kâr eksiyse açmadan önce bir kez sor
+// "2x" düğmesi ilk göründüğünde ne işe yaradığını bir kez anlat (12 sn sonra ya da dokununca kaybolur)
+function fastTip() {
+  const P = prefs(); if (P.fastTip || st.day < 1) return ''; // ilk gün açılış bildirimleriyle çakışmasın
+  if (!ui._ftT) ui._ftT = setTimeout(() => { prefs().fastTip = true; save(); const h = $('#screen .hud2'); if (h) h.outerHTML = hud(); }, 12000);
+  return `<div class="ftip" data-a="fasttip" role="button" tabindex="0"><b>Reklam izle, 15 dakika 2 kat hızlı oyna</b><small>Zaman hızlı akar, ay sonu daha çabuk gelir.</small></div>`;
+}
+function lossGate(a) {
+  if (!ui.setup) return false; const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name;
+  if (ui.confirm && ui.confirm.k === 'lossopen' && ui.confirm.a === a) { ui.confirm = null; return false; }
+  const f = fcGet(ui.setup.L, ui.setup.ch); if (!f || f.profit >= 0) return false;
+  ui.confirm = { k: 'lossopen', a, p: f.profit }; renderLayer(); return true;
+}
+function lossBox() {
+  if (!(ui.confirm && ui.confirm.k === 'lossopen')) return '';
+  return `<div class="lossbox"><b>Bu dükkan tahminen zarar eder</b><small>Seçtiğin ayarlarla aylık işletme kârı yaklaşık <span class="neg">${fmtK(ui.confirm.p)}</span>. Kasa eksiye düşerse banka ihtar çeker, şube zorla devredilebilir. Konsepti, dekoru ya da personeli değiştirmeyi veya başka bir semti dene.</small><div class="row"><button class="btn sm" data-a="cancelconfirm">Vazgeç</button><button class="btn sm danger" data-a="${ui.confirm.a}">Yine de aç</button></div></div>`;
 }
 function adBtn(kind, label, v, extra) { if (!monetOn()) return ''; const left = K.adLeft(st, kind); if (!left) return ''; return `<button class="adbtn ${extra || ''}" data-a="ad" data-k="${kind}" data-v="${v == null ? '' : v}">${ADI}<span>${label}</span></button>`; }
 function showAd(kind) {

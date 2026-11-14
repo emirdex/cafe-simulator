@@ -1393,3 +1393,19 @@ tr.pslide td { background: var(--accent-soft); padding: 10px 12px; }
 .scene .go { top: 44px; }
 .scene .adbtn.onscene.gift { top: 82px; }
 .scene .adbtn.onscene:not(.gift) { top: 118px; }
+
+/* kasa kartı: grafik yokken yazı tüm genişliği kullansın, grafik dikeyde ortalı */
+.kasa2 > .kt:only-child { grid-column: 1 / -1; }
+.kasa2 .ks { align-self: center; }
+/* "2x" ilk açıklama balonu */
+.hspeed { position: relative; }
+.ftip { position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: 220px; display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 8px 10px; border-radius: 10px; border: 1px solid color-mix(in srgb, #8fb7e8 50%, var(--line)); background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px rgb(0 0 0 / .35); font: inherit; cursor: pointer; }
+.ftip::before { content: ""; position: absolute; top: -6px; right: 18px; width: 10px; height: 10px; background: var(--panel); border-left: 1px solid color-mix(in srgb, #8fb7e8 50%, var(--line)); border-top: 1px solid color-mix(in srgb, #8fb7e8 50%, var(--line)); transform: rotate(45deg); }
+.ftip b { font-size: 11.5px; font-weight: 500; } .ftip small { font-size: 10px; color: var(--muted); }
+/* zarar onayı ve ilk dükkan kısayolu */
+.lossbox { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--bad) 50%, var(--line)); background: var(--panel2); }
+.lossbox b { font-size: 12.5px; font-weight: 600; } .lossbox small { font-size: 10.5px; color: var(--muted); line-height: 1.4; } .lossbox .row { justify-content: flex-end; gap: 8px; }
+.quickopen { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); }
+.quickopen > div { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; } .quickopen b { font-size: 12.5px; font-weight: 600; } .quickopen small { font-size: 10.5px; color: var(--muted); line-height: 1.4; }
+.quickopen .gold { flex: none; white-space: nowrap; height: 34px; font-size: 12px; }
+@media (max-width: 760px) { .quickopen { flex-direction: column; align-items: stretch; } }
