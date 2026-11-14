@@ -1119,7 +1119,7 @@ function goalsCard() {
   const next = G.filter(g => !done[g.id]).slice(0, 5); const recent = G.filter(g => done[g.id]).sort((a, b) => done[b.id] - done[a.id]).slice(0, 3);
   const rw = g => [g.r.cash ? fmtK(g.r.cash * st.world.refIdx) : '', g.r.rep ? '+' + g.r.rep + ' itibar' : '', g.r.followers ? '+' + g.r.followers.toLocaleString('tr-TR') + ' takipçi' : ''].filter(Boolean).join(' · ');
   return `<section class="card goals"><div class="row between"><h3>Hedefler</h3><span class="muted" style="font-size:10.5px">${nd}/${G.length} tamamlandı</span></div><div class="gbar"><i style="width:${nd / G.length * 100}%"></i></div>
-    <div class="gl">${next.map(g => `<div class="gi"><span class="gk"></span><div><b>${esc(g.n)}</b><small>${esc(g.d)}</small></div><span class="gr">${rw(g)}</span></div>`).join('')}${recent.map(g => `<div class="gi done"><span class="gk">✓</span><div><b>${esc(g.n)}</b><small>${esc(g.d)}</small></div><span class="gr">${rw(g)}</span></div>`).join('')}</div></section>`;
+    <div class="gl">${next.map(g => `<div class="goal"><span class="gk"></span><div><b>${esc(g.n)}</b><small>${esc(g.d)}</small></div><span class="gr">${rw(g)}</span></div>`).join('')}${recent.map(g => `<div class="goal done"><span class="gk">✓</span><div><b>${esc(g.n)}</b><small>${esc(g.d)}</small></div><span class="gr">${rw(g)}</span></div>`).join('')}</div></section>`;
 }
 function ramChip(b) {
   const R = K.ramadanInfo(st.day); let t = '';

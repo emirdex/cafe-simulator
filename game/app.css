@@ -7,6 +7,7 @@
   --f-display: "Plus Jakarta Sans", "Manrope", system-ui, sans-serif; --f-body: "Manrope", system-ui, sans-serif; --f-mono: "DM Mono", ui-monospace, monospace;
   color-scheme: dark;
 }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 html, body { height: 100%; }
 body { background: radial-gradient(120% 90% at 50% 0%, #1a1c22 0%, var(--page) 60%); color: var(--ink); margin: 0; overflow: hidden; font-family: var(--f-body); -webkit-font-smoothing: antialiased; }
 #root { height: 100%; }
@@ -1067,10 +1068,10 @@ td.wycell { min-width: 170px; }
 .goals { display: flex; flex-direction: column; gap: 8px; }
 .gbar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; } .gbar i { display: block; height: 100%; background: var(--accent); }
 .gl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.gi { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 7px 9px; border: 1px solid var(--line); border-radius: 10px; }
-.gi b { font-size: 12px; font-weight: 600; display: block; } .gi small { font-size: 10px; color: var(--muted); }
+.goal { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 9px; border: 1px solid var(--line); border-radius: 10px; }
+.goal b { font-size: 12px; font-weight: 600; display: block; } .goal small { font-size: 10px; color: var(--muted); }
 .gk { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--muted); display: grid; place-items: center; font-size: 10px; }
-.gi.done { opacity: .6; } .gi.done .gk { background: var(--accent); border-color: var(--accent); color: #1a1408; }
+.goal.done { opacity: .6; } .goal.done .gk { background: var(--accent); border-color: var(--accent); color: #1a1408; }
 .gr { font-size: 10px; color: var(--accent); white-space: nowrap; }
 /* ramazan */
 .ramchip { position: absolute; left: 12px; bottom: 12px; display: flex; align-items: center; gap: 6px; font-size: 10.5px; padding: 5px 10px; border-radius: 99px; background: #0d1524d9; border: 1px solid #c7a7e855; color: #e3d6f7; backdrop-filter: blur(4px); max-width: calc(100% - 24px); }
