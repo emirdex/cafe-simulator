@@ -1685,7 +1685,10 @@ function planNotifs() {
   const per = {}; N.schedule(list.sort((a, c) => a.at - c.at).filter(x => { const k = new Date(x.at).toDateString(); per[k] = (per[k] || 0) + 1; return per[k] <= 2; }));
 }
 function askNotifPerm() { if (window.KZNotif && prefs().notif !== false) window.KZNotif.permission(); }
-document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) { save(); planNotifs(); } else { if (window.KZNotif) window.KZNotif.clear(); checkOffline(); render(); } });
+document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) { save(); planNotifs(); } else { planNotifs(); checkOffline(); render(); } });
+// Android uygulama arka plana geçerken JS'i hemen dondurabilir; plan oyun açıkken de her dakika tazelenir.
+// Tüm zamanlar "şimdiden itibaren" olduğu için oyun açıkken hiçbiri tetiklenmez (her dakika ileri itilir).
+setInterval(() => { if (st && !document.hidden) planNotifs(); }, 60000);
 window.addEventListener('pagehide', () => { if (st) save(); });
 const saved = loadSave();
 if (saved && saved.v === 1) ui.startName = saved.name;

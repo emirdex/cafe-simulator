@@ -746,7 +746,7 @@ function mallListings(st, id) {
   st.listings[k] = { until: v.until, items }; return items;
 }
 function mallMult(st, b) { if (!b.mall) return 1; const m = mallById(st, b.mall); if (!m) return 1; return MALL_SIZE[m.s].f * (m.isNew && st.day - m.openDay < 75 ? 1.25 : 1); }
-const NEW_MALL = ['Vadi', 'Nova', 'Atlas', 'Park', 'Life', 'Meydan', 'Panorama', 'Kule', 'Bahçe', 'Galeri', 'Liman', 'Yıldız'];
+const NEW_MALL = ['Vadicik', 'Novita', 'Atlasya', 'Parkino', 'Lifeya', 'Meydancık', 'Panoramik', 'Kulecik', 'Bahçeli', 'Galerino', 'Limancık', 'Yıldızlı'];
 function maybeNewMall(st) {
   if (st._noEvents || rnd(st) > 1 / 140) return;
   if ((st.newMalls || []).filter(m => st.day - m.openDay < 120).length) return;
