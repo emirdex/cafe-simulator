@@ -1148,6 +1148,15 @@ function vCompany() {
     </div></div>`;
 }
 
+/* ---------- puan isteme ----------
+   Google/Apple'ın kendi değerlendirme penceresi. Güzel bir anda sorulur (kârlı ay, 3. şube),
+   oyunda en az 2 ay geçmiş olmalı, iki istek arasında 30 gerçek gün, toplamda en fazla 3 kez. */
+function askReview(why) {
+  if (!st || !window.KZReview) return; const R = st.review = st.review || { n: 0, at: 0 };
+  if (R.n >= 3 || st.day < 60 || Date.now() - R.at < 30 * 864e5) return;
+  R.n++; R.at = Date.now(); save();
+  setTimeout(() => { try { window.KZReview(why); } catch (e) {} }, 1200);
+}
 function migrate(st) {
   const map = { ank: '06', izm: '35', ant: '07', brs: '16', mug: '48' };
   for (const b of st.branches) { if (DISTRICTS[b.d]) continue; let code = /^[pd]\d\d/.test(b.d) ? b.d.slice(1, 3) : map[b.d.slice(0, 3)]; const ds = code ? K.provDistricts(code) : []; const c = ds.find(id => DISTRICTS[id].central) || ds[0]; b.d = c || 'kartal'; K.computeOffer(st, b); }
@@ -1185,6 +1194,7 @@ function settingsSheet() {
       <section class="sgroup"><h4>Oyun</h4>
         <div class="srow"><div><b>Ses efektleri</b><small>Kasa ve kapı zili, az ve sade</small></div>${sw('sfx', P.sfx !== false, 'Ses efektleri')}</div>
         <div class="srow"><div><b>Kafe ambiyansı</b><small>Ana ekranda hafif uğultu</small></div>${sw('amb', !!P.amb, 'Kafe ambiyansı')}</div>
+        <div class="srow"><div><b>Bildirimler</b><small>Günlük ödül ve şubelerin seni beklediğinde haber ver</small></div>${sw('notif', P.notif !== false, 'Bildirimler')}</div>
         <div class="srow"><div><b>Ay sonu raporu</b><small>Her ay kapanışında Z raporunu göster</small></div>${sw('report', P.report, 'Ay sonu raporu')}</div>
         <div class="srow"><div><b>Kasa baloncukları</b><small>Ana ekranda kazanılan tutarları göster</small></div>${sw('coins', P.coins, 'Kasa baloncukları')}</div>
       </section>
@@ -1278,7 +1288,7 @@ document.addEventListener('click', e => {
     case 'speed': if (+v === 0) st.paused = true; else { st.paused = false; st.speed = +v === 2 && st.iap && st.iap.fast ? 2 : 1; } break;
     case 'settings': ui.settings = true; break;
     case 'closesettings': ui.settings = false; ui.confirm = null; break;
-    case 'pref': { const P = prefs(); P[v] = !P[v]; save(); renderLayer(); return; }
+    case 'pref': { const P = prefs(); if (v === 'notif') { P.notif = P.notif === false; if (P.notif) askNotifPerm(); } else P[v] = !P[v]; save(); renderLayer(); return; }
     case 'cashfmt': prefs().cashFull = v === '1'; save(); break;
     case 'setspeed': st.speed = +v; st.paused = false; break;
     case 'rename': { const nm = $('#rename'); const val = nm && nm.value.trim(); if (val) { st.name = val.slice(0, 24); save(); toast('Kafe adı güncellendi.'); } break; }
@@ -1300,7 +1310,7 @@ document.addEventListener('click', e => {
     case 'closesetup': ui.setup = null; ui._keepScroll = true; break;
     case 'ch': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value; ui.setup.ch[el.dataset.k] = v; if (el.dataset.k === 'concept') ui.setup.ch.staff = Math.max(ui.setup.ch.staff, K.minStaff(v, ui.setup.L.tables)); renderLayer(); return; }
     case 'staff': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value; ui.setup.ch.staff = Math.max(1, Math.min(40, ui.setup.ch.staff + +v)); renderLayer(); return; }
-    case 'loanopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const lo = bestLoan(cost - st.cash); if (!lo.o) { toast(lo.why); break; } const lr = K.takeLoan(st, lo.o.id, lo.amt, lo.q.r); if (!lr.ok) { toast(lr.msg); break; } const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(fmt(lo.amt) + ' kredi çekildi. ' + r.b.name + (r.b.status === 'acik' ? ' açıldı.' : ' kiralandı.')); sfx('bell'); save(); } else toast(r.msg); break; }
+    case 'loanopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const cost = K.setupCost(st, ui.setup.L, ui.setup.ch).total; const lo = bestLoan(cost - st.cash); if (!lo.o) { toast(lo.why); break; } const lr = K.takeLoan(st, lo.o.id, lo.amt, lo.q.r); if (!lr.ok) { toast(lr.msg); break; } const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { if (st.branches.length === 1) setTimeout(askNotifPerm, 2500); if (st.branches.length >= 3) askReview('3-sube'); ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(fmt(lo.amt) + ' kredi çekildi. ' + r.b.name + (r.b.status === 'acik' ? ' açıldı.' : ' kiralandı.')); sfx('bell'); save(); } else toast(r.msg); break; }
     case 'compare': ui.cmp = true; renderLayer(); return;
     case 'shop': ui.shop = true; ui.shopPrev = null; renderLayer(); return;
     case 'setbrand': { if (brandAllowed(v)) { st.brand = Object.assign({}, st.brand || {}, { color: v }); save(); } renderLayer(); return; }
@@ -1315,7 +1325,7 @@ document.addEventListener('click', e => {
     case 'ticket': { const r = K.useTicket(st, +v); toast(r.msg); save(); break; }
     case 'closecmp': ui.cmp = false; render(); return;
     case 'rentcmp': { ui.cmp = false; const L = curListings().find(x => x.id === v); if (L) { ui.setup = { L, ch: K.defaultChoice(st, L) }; ui.setup.ch.name = DISTRICTS[L.did].n; } render(); return; }
-    case 'confirmopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(r.b.status === 'acik' ? r.b.name + ' açıldı. Hayırlı olsun!' : r.b.name + ' kiralandı, ruhsatlar bekleniyor.'); save(); } else toast(r.msg); break; }
+    case 'confirmopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { if (st.branches.length === 1) setTimeout(askNotifPerm, 2500); if (st.branches.length >= 3) askReview('3-sube'); ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(r.b.status === 'acik' ? r.b.name + ' açıldı. Hayırlı olsun!' : r.b.name + ' kiralandı, ruhsatlar bekleniyor.'); save(); } else toast(r.msg); break; }
     case 'branch': ui.branch = +v; ui.view = 'branch'; ui.btab = 'ozet'; ui.confirm = null; break;
     case 'btab': ui.btab = v; ui.confirm = null; break;
     case 'pedit': { ui.pedit = ui.pedit === v ? null : v; ui.pval = null; ui._keepScroll = true; break; }
@@ -1360,7 +1370,7 @@ document.addEventListener('click', e => {
     case 'updlater': { ui.upd = 'done'; render(); return; }
     case 'offok': { ui.offline = null; render(); return; }
     case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral') arg = +v; if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
-    case 'evok': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
+    case 'evok': { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') { const r = st.reports[ev.r] || st.reports[st.reports.length - 1]; if (r && r.profit > 0) askReview('karli-ay'); } if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
     case 'evfin': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, 0); ui.view = 'finance'; ui.rep = null; break; }
     case 'forcedsell': K.forcedTransfer(st, +v); save(); break;
     case 'crisissell': { const bb = st.branches.find(x => x.id === +v); if (bb) K.sellBranch(st, bb); if (st.cash >= -K.kmhLimit(st)) st.crisis = false; break; }
@@ -1658,7 +1668,24 @@ function loop(now) {
 window.addEventListener('kzupdate', () => { if (st) render(); });
 setInterval(() => { document.querySelectorAll('[data-cd]').forEach(e => { const b = e.querySelector('b'); if (b) b.textContent = cdTxt(+e.dataset.cd - nowT()); }); }, 1000);
 window.addEventListener('online', () => { if (st) checkOffline(); });
-document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) save(); else { checkOffline(); render(); } });
+/* ---------- telefon bildirimleri (yerel, sunucusuz) ----------
+   Oyun arka plana geçince planlanır, açılınca hepsi iptal edilir. Günde en fazla 2, 22:00–09:00 arası gönderilmez. */
+function quietShift(t) { const d = new Date(t); const h = d.getHours(); if (h >= 22) { d.setDate(d.getDate() + 1); d.setHours(10, 0, 0, 0); } else if (h < 9) d.setHours(10, 0, 0, 0); return d.getTime(); }
+function planNotifs() {
+  const N = window.KZNotif; if (!N) return;
+  if (!st || st.over || !st.branches.length || prefs().notif === false) { N.clear(); return; }
+  const now = Date.now(), list = []; const maxD = K.iapState(st).patron ? 60 : 30;
+  const b = st.branches[0]; const semt = DISTRICTS[b.d] ? DISTRICTS[b.d].n : '';
+  list.push({ id: 1, at: quietShift(now + maxD * 60000), title: 'Şubelerin ' + maxD + ' gündür sensiz çalışıyor', body: 'Ay sonu raporların ve kasan seni bekliyor. Bundan sonrası birikmiyor, şimdi bir uğra.' });
+  const t = new Date(now); t.setDate(t.getDate() + 1); t.setHours(Math.min(21, Math.max(10, t.getHours())), 0, 0, 0);
+  list.push({ id: 2, at: t.getTime(), title: 'Günlük ödülün hazır', body: fmt(K.dailyGift(st)) + ' ve 3 Altın Çekirdek hesabına eklenmeyi bekliyor.' });
+  list.push({ id: 3, at: quietShift(now + 3 * 864e5), title: (st.name || 'Kafen') + ' seni bekliyor', body: semt + ' şubende müşteriler var, rakiplerin boş durmuyor. Menüne ve fiyatlarına bir göz at.' });
+  list.push({ id: 4, at: quietShift(now + 7 * 864e5), title: 'Bir haftadır yoksun', body: 'Yeni semtlerde ve AVM\'lerde boş dükkanlar var. Zincirini büyütmeye devam et.' });
+  // aynı güne en fazla 2 bildirim
+  const per = {}; N.schedule(list.sort((a, c) => a.at - c.at).filter(x => { const k = new Date(x.at).toDateString(); per[k] = (per[k] || 0) + 1; return per[k] <= 2; }));
+}
+function askNotifPerm() { if (window.KZNotif && prefs().notif !== false) window.KZNotif.permission(); }
+document.addEventListener('visibilitychange', () => { if (!st) return; if (document.hidden) { save(); planNotifs(); } else { if (window.KZNotif) window.KZNotif.clear(); checkOffline(); render(); } });
 window.addEventListener('pagehide', () => { if (st) save(); });
 const saved = loadSave();
 if (saved && saved.v === 1) ui.startName = saved.name;

@@ -193,5 +193,40 @@
     if (x) x.click(); else P.App.minimizeApp && P.App.minimizeApp();
   });
 
+  /* Puan isteme: mağazanın kendi penceresi (Google/Apple ne zaman gösterileceğine kendisi karar verir) */
+  window.KZReview = function (why) {
+    if (!P.InAppReview) return; LOG.add('INFO', 'puan istendi: ' + why);
+    P.InAppReview.requestReview().catch(function (e) { LOG.add('INFO', 'puan penceresi açılamadı: ' + fmtErr(e)); });
+  };
+
+  /* Yerel bildirimler: izin ilk şube açılınca istenir; sunucu yok, telefon kendisi zamanlar */
+  var LN = P.LocalNotifications;
+  if (LN) {
+    if (PLATFORM === 'android') LN.createChannel({ id: 'oyun', name: 'Oyun bildirimleri', description: 'Günlük ödül ve şube hatırlatmaları', importance: 3 }).catch(function () {});
+    window.KZNotif = {
+      permission: function () { return LN.checkPermissions().then(function (p) { if (p.display === 'prompt' || p.display === 'prompt-with-rationale') return LN.requestPermissions(); return p; }).catch(function () {}); },
+      clear: function () { return LN.getPending().then(function (r) { if (r && r.notifications && r.notifications.length) return LN.cancel({ notifications: r.notifications.map(function (n) { return { id: n.id }; }) }); }).catch(function () {}); },
+      // önce eskileri siler, sonra yenileri kurar (sıralı; yarış olmasın)
+      schedule: function (list) {
+        window.KZNotif.clear().then(function () { return LN.checkPermissions(); }).then(function (p) { if (!list.length || p.display !== 'granted') return;
+          return LN.schedule({ notifications: list.map(function (n) { return { id: n.id, title: n.title, body: n.body, schedule: { at: new Date(n.at) }, channelId: 'oyun', smallIcon: 'ic_stat_kafe', iconColor: '#d4b26a' }; }) });
+        }).then(function () { LOG.add('INFO', 'bildirim planlandı: ' + list.length); }).catch(function (e) { LOG.add('INFO', 'bildirim planlanamadı: ' + fmtErr(e)); });
+      }
+    };
+  }
+
+  /* Hata takibi (Firebase Crashlytics): yerel çökmeler otomatik, oyun içi JS hataları burada iletilir */
+  var CR = P.FirebaseCrashlytics, crN = 0;
+  function crSend(msg, stack) {
+    if (!CR || crN >= 20) return; crN++;
+    CR.recordException({ message: String(msg).slice(0, 300), stacktrace: stack || undefined }).catch(function () {});
+  }
+  if (CR) {
+    infoP.then(function (i) { CR.setCustomKey({ key: 'surum', value: i.version + ' (' + i.build + ')', type: 'string' }).catch(function () {}); }, function () {});
+    window.addEventListener('error', function (e) { crSend((e.message || 'hata') + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; crSend('promise: ' + fmtErr(r)); });
+  }
+  window.KZCrash = { log: function (m) { if (CR) CR.log({ message: String(m).slice(0, 200) }).catch(function () {}); } };
+
   Promise.all([restore(), screen()]).then(boot, boot).then(function () { initAds(); initIAP(); checkUpdate(); });
 })();
