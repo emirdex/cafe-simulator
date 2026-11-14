@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "749320509796",
+    "project_id": "cafe-simulator-514207",
+    "storage_bucket": "cafe-simulator-514207.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:749320509796:android:0e40af839e2a1815acc271",
+        "android_client_info": {
+          "package_name": "io.arcbyte.cafesimulator"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpByC-rNpwGy4OnsxauYZWlifJ3sA6eFc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
