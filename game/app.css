@@ -1380,3 +1380,9 @@ tr.pslide td { background: var(--accent-soft); padding: 10px 12px; }
 .hpill.hskip span { font-size: 11.5px; font-weight: 500; white-space: nowrap; }
 .hpill.hskip small { font-size: 10px; color: var(--muted); white-space: nowrap; }
 @media (max-width: 760px) { .hpill.hskip small { display: none; } }
+
+/* yeni oyun onayı ve önceki oyun kartı */
+.newconf { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line)); background: var(--panel); }
+.newconf b { font-size: 13px; font-weight: 600; } .newconf small { font-size: 11px; color: var(--muted); line-height: 1.4; }
+.newconf .row { justify-content: flex-end; gap: 8px; }
+.savecard.prev { opacity: .8; } .savecard.prev .sv-t { padding-left: 4px; }

@@ -30,6 +30,14 @@ function syncTime() {
 K.setClock(nowT); syncTime();
 let lastSavePerf = performance.now();
 function save() { const pn = performance.now(), fg = pn - lastSavePerf; lastSavePerf = pn; saveWallet(); try { if (st && TT.ok && !TT.syncing) st.savedAt = nowT(); else if (st && st.savedAt) st.savedAt += Math.max(0, Math.min(fg, 6 * 3600e3)); localStorage.setItem(SAVE, JSON.stringify(st)); ui.lastSave = Date.now(); } catch (e) {} }
+const PREV = SAVE + '-onceki'; // yeni oyuna başlarken eski kayıt burada saklanır (geri alınabilsin)
+function loadPrev() { try { const s = localStorage.getItem(PREV); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function backupPrev() { try { const cur = localStorage.getItem(SAVE); if (cur) localStorage.setItem(PREV, cur); } catch (e) {} }
+function continueGame() {
+  const s0 = loadSave(); if (!s0) return false;
+  try { st = s0; migrate(st); } catch (e) { st = null; if (window.KZCrash) window.KZCrash.log('kayıt yüklenemedi: ' + e.message); return false; }
+  st.paused = true; checkOffline(); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return true;
+}
 function loadSave() { try { const s = localStorage.getItem(SAVE); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
 function clearSave() { try { localStorage.removeItem(SAVE); } catch (e) {} }
 
@@ -500,8 +508,9 @@ function startView() {
       <div class="bgrp"><span class="fl">Marka rengi <b>${BRAND_COLORS[B.color].n}</b></span><div class="swatches">${Object.entries(BRAND_COLORS).filter(([k, c]) => !c.premium).map(([k, c]) => `<button class="swt ${B.color === k ? 'on' : ''}" data-a="brand" data-k="color" data-v="${k}" aria-label="${c.n}" style="--sw:${c.sw};--sg:${c.sign[1]}"><i></i></button>`).join('')}</div></div>
       <div class="bgrp"><span class="fl">Logo</span><div class="icons">${Object.entries(BRAND_ICONS).map(([k, path]) => `<button class="ico ${B.icon === k ? 'on' : ''}" data-a="brand" data-k="icon" data-v="${k}" aria-label="${k}"><svg viewBox="0 0 24 24">${path}</svg></button>`).join('')}</div></div>
       <div class="bgrp"><span class="fl">Tabela yazısı</span><div class="fonts">${Object.entries(BRAND_FONTS).map(([k, f]) => `<button class="fnt ${B.font === k ? 'on' : ''}" data-a="brand" data-k="font" data-v="${k}" style="font-family:${f.f}">${f.n}</button>`).join('')}</div></div>
-      <button class="gold go3" data-a="newgame">Dükkanı aç ${IC.next}</button>
+      ${ui.confirm && ui.confirm.k === 'newgame' && saved ? `<div class="newconf"><b>Kayıtlı oyunun var</b><small>${esc(saved.name)} · Gün ${saved.day + 1} · ${saved.branches.length} şube. Yeni oyuna başlarsan bu kayıt "önceki oyun" olarak saklanır, istersen geri dönebilirsin.</small><div class="row"><button class="btn sm" data-a="cancelnew">Vazgeç</button><button class="btn sm danger" data-a="newgame">Yeni oyuna başla</button></div></div>` : `<button class="gold go3" data-a="newgame">Dükkanı aç ${IC.next}</button>`}
       ${saved ? `<button class="savecard" data-a="continue"><span class="sv-ic" style="background:${BRAND_COLORS[sb.color].sw}"><svg viewBox="0 0 24 24">${BRAND_ICONS[sb.icon]}</svg></span><span class="sv-t"><small>Kayıtlı oyun</small><b>${esc(saved.name)}</b><small>Gün ${saved.day + 1} · ${saved.branches.length} şube · ${fmtK(saved.cash)}</small></span><span class="sv-go">Devam ${IC.next}</span></button>` : ''}
+      ${(() => { const pv = loadPrev(); return pv && pv.v === 1 ? `<button class="savecard prev" data-a="prevgame"><span class="sv-t"><small>Önceki oyun</small><b>${esc(pv.name)}</b><small>Gün ${pv.day + 1} · ${pv.branches.length} şube · ${fmtK(pv.cash)}</small></span><span class="sv-go">Geri dön ${IC.next}</span></button>` : ''; })()}
     </div>
   </div>`;
 }
@@ -1276,8 +1285,11 @@ document.addEventListener('click', e => {
   if (el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
   if (a === 'rotateok') { ui.rotateOk = true; fit(); return; }
   if (a === 'brand') { ui.brand = brandOf(ui.brand); ui.brand[el.dataset.k] = v; const nm = $('#nm'); if (nm) ui.startName = nm.value; const sv = $('#nm') && $('#nm').selectionStart; render(); const n2 = $('#nm'); return; }
-  if (a === 'newgame') { const nm = $('#nm'); st = K.newGame({ name: (nm && nm.value) || 'Demli Kafe' }); st.brand = brandOf(ui.brand); carryWallet(st); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } ui.view = 'home'; ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; render(); save(); return; }
-  if (a === 'continue') { st = loadSave(); if (!st) return; migrate(st); st.paused = true; checkOffline(); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } if (ui.mapLevel === 'ist') ui.mapLevel = 'tr'; ui.view = 'home'; render(); return; }
+  if (a === 'newgame' && loadSave() && !(ui.confirm && ui.confirm.k === 'newgame')) { ui.confirm = { k: 'newgame' }; render(); return; }
+  if (a === 'cancelnew') { ui.confirm = null; render(); return; }
+  if (a === 'newgame') { ui.confirm = null; backupPrev(); const nm = $('#nm'); st = K.newGame({ name: (nm && nm.value) || 'Demli Kafe' }); st.brand = brandOf(ui.brand); carryWallet(st); if (ui.pendRestore) { const l = ui.pendRestore; ui.pendRestore = null; applyRestore(l, true); } ui.view = 'home'; ui.sel = null; ui.prov = null; ui.mapLevel = 'tr'; render(); save(); return; }
+  if (a === 'continue') { continueGame(); return; }
+  if (a === 'prevgame') { const pv = loadPrev(); if (!pv) return; try { const cur = localStorage.getItem(SAVE); localStorage.setItem(SAVE, JSON.stringify(pv)); if (cur) localStorage.setItem(PREV, cur); else localStorage.removeItem(PREV); } catch (e) {} st = null; continueGame(); return; }
   if (!st) return;
   const b = st.branches.find(x => x.id === ui.branch);
   switch (a) {
@@ -1361,7 +1373,7 @@ document.addEventListener('click', e => {
     case 'stake': return res(K.buyStake(st, v));
     case 'sellstake': K.sellStake(st, +v); break;
     case 'reset': ui.confirm = { k: 'reset' }; renderLayer(); return;
-    case 'doreset': clearSave(); st = null; ui.confirm = null; ui.setup = null; ui.settings = false; render(); return;
+    case 'doreset': backupPrev(); clearSave(); st = null; ui.confirm = null; ui.setup = null; ui.settings = false; render(); return;
     case 'evad': { const ev = K.nextEvent(st); const k = el.dataset.k; if (ev) runAd(k, null, () => K.resolveEvent(st, ev, +v)); return; }
     case 'restore': { if (!window.KZIAP || !window.KZIAP.restore) { toast(window.KZ_NATIVE ? 'Mağaza bağlantısı henüz hazır değil, biraz sonra dene.' : 'Tarayıcı sürümünde satın alım yok.'); return; } toast('Mağaza kontrol ediliyor…'); window.KZIAP.restore(false).then(l => applyRestore(l, false), err => toast('Geri yükleme yapılamadı: ' + ((err && err.message) || 'bağlantı hatası'))); return; }
     case 'copylog': { const t = window.KZLog ? window.KZLog.text() : ''; (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Günlük kopyalandı (' + window.KZLog.lines.length + ' satır).'), () => { const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('Günlük kopyalandı.'); } catch (e) { toast('Kopyalanamadı.'); } ta.remove(); }); return; }
@@ -1704,7 +1716,9 @@ window.addEventListener('pagehide', () => { if (st) save(); });
 const saved = loadSave();
 if (saved && saved.v === 1) ui.startName = saved.name;
 applyTheme(themeId());
-shell(); render();
+shell();
+// kayıtlı oyun varsa açılış ekranını atla, doğrudan kaldığı yerden devam et
+if (!(saved && saved.v === 1 && continueGame())) render();
 requestAnimationFrame(loop);
 })();
 // Ekran çerçevesi kaydırılmamalı: odaklanan gizli bir giriş tarayıcıya #screen'i kaydırtırsa geri al
