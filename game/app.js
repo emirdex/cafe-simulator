@@ -1148,6 +1148,15 @@ function vCompany() {
     </div></div>`;
 }
 
+/* ---------- puan isteme ----------
+   Google/Apple'ın kendi değerlendirme penceresi. Güzel bir anda sorulur (kârlı ay, 3. şube),
+   oyunda en az 2 ay geçmiş olmalı, iki istek arasında 30 gerçek gün, toplamda en fazla 3 kez. */
+function askReview(why) {
+  if (!st || !window.KZReview) return; const R = st.review = st.review || { n: 0, at: 0 };
+  if (R.n >= 3 || st.day < 60 || Date.now() - R.at < 30 * 864e5) return;
+  R.n++; R.at = Date.now(); save();
+  setTimeout(() => { try { window.KZReview(why); } catch (e) {} }, 1200);
+}
 function migrate(st) {
   const map = { ank: '06', izm: '35', ant: '07', brs: '16', mug: '48' };
   for (const b of st.branches) { if (DISTRICTS[b.d]) continue; let code = /^[pd]\d\d/.test(b.d) ? b.d.slice(1, 3) : map[b.d.slice(0, 3)]; const ds = code ? K.provDistricts(code) : []; const c = ds.find(id => DISTRICTS[id].central) || ds[0]; b.d = c || 'kartal'; K.computeOffer(st, b); }
@@ -1315,7 +1324,7 @@ document.addEventListener('click', e => {
     case 'ticket': { const r = K.useTicket(st, +v); toast(r.msg); save(); break; }
     case 'closecmp': ui.cmp = false; render(); return;
     case 'rentcmp': { ui.cmp = false; const L = curListings().find(x => x.id === v); if (L) { ui.setup = { L, ch: K.defaultChoice(st, L) }; ui.setup.ch.name = DISTRICTS[L.did].n; } render(); return; }
-    case 'confirmopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(r.b.status === 'acik' ? r.b.name + ' açıldı. Hayırlı olsun!' : r.b.name + ' kiralandı, ruhsatlar bekleniyor.'); save(); } else toast(r.msg); break; }
+    case 'confirmopen': { const nm = $('#bname'); if (nm) ui.setup.ch.name = nm.value || ui.setup.ch.name; const r = K.openBranch(st, ui.setup.L, ui.setup.ch); if (r.ok) { if (st.branches.length >= 3) askReview('3-sube'); ui.setup = null; ui.view = 'home'; ui.homeIdx = st.branches.length - 1; toast(r.b.status === 'acik' ? r.b.name + ' açıldı. Hayırlı olsun!' : r.b.name + ' kiralandı, ruhsatlar bekleniyor.'); save(); } else toast(r.msg); break; }
     case 'branch': ui.branch = +v; ui.view = 'branch'; ui.btab = 'ozet'; ui.confirm = null; break;
     case 'btab': ui.btab = v; ui.confirm = null; break;
     case 'pedit': { ui.pedit = ui.pedit === v ? null : v; ui.pval = null; ui._keepScroll = true; break; }
@@ -1360,7 +1369,7 @@ document.addEventListener('click', e => {
     case 'updlater': { ui.upd = 'done'; render(); return; }
     case 'offok': { ui.offline = null; render(); return; }
     case 'ad': { const k = el.dataset.k; let arg = v; if (k === 'ruhsat' || k === 'moral') arg = +v; if (k === 'aybonus') arg = +v; if (k === 'offline') { runAd(k, null, () => { ui.offline = null; }); return; } if (k === 'ilan') arg = { did: ui.sel, type: ui.type }; if (k === 'incele') arg = { did: ui.sel, type: ui.type, id: v, mall: ui.mall }; runAd(k, arg, k === 'aybonus' ? () => { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') K.resolveEvent(st, ev, 0); } : null); return; }
-    case 'evok': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
+    case 'evok': { const ev = K.nextEvent(st); if (ev && ev.k === 'rapor') { const r = st.reports[ev.r] || st.reports[st.reports.length - 1]; if (r && r.profit > 0) askReview('karli-ay'); } if (ev) K.resolveEvent(st, ev, +v); if (st.flags.gotoMall) { const m = K.mallById(st, st.flags.gotoMall); st.flags.gotoMall = null; if (m) { ui.view = 'map'; ui.mall = m.id; ui.type = 'avm'; ui.sel = K.mallDid(st, m); ui.prov = m.p; ui.mapLevel = 'prov'; const pv = provView(m.p); setMV({ x: m.x - pv[2] * .3, y: m.y - pv[2] * .3 * dims().h / dims().w, w: pv[2] * .6 }); } } save(); break; }
     case 'evfin': { const ev = K.nextEvent(st); if (ev) K.resolveEvent(st, ev, 0); ui.view = 'finance'; ui.rep = null; break; }
     case 'forcedsell': K.forcedTransfer(st, +v); save(); break;
     case 'crisissell': { const bb = st.branches.find(x => x.id === +v); if (bb) K.sellBranch(st, bb); if (st.cash >= -K.kmhLimit(st)) st.crisis = false; break; }

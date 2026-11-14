@@ -193,5 +193,24 @@
     if (x) x.click(); else P.App.minimizeApp && P.App.minimizeApp();
   });
 
+  /* Puan isteme: mağazanın kendi penceresi (Google/Apple ne zaman gösterileceğine kendisi karar verir) */
+  window.KZReview = function (why) {
+    if (!P.InAppReview) return; LOG.add('INFO', 'puan istendi: ' + why);
+    P.InAppReview.requestReview().catch(function (e) { LOG.add('INFO', 'puan penceresi açılamadı: ' + fmtErr(e)); });
+  };
+
+  /* Hata takibi (Firebase Crashlytics): yerel çökmeler otomatik, oyun içi JS hataları burada iletilir */
+  var CR = P.FirebaseCrashlytics, crN = 0;
+  function crSend(msg, stack) {
+    if (!CR || crN >= 20) return; crN++;
+    CR.recordException({ message: String(msg).slice(0, 300), stacktrace: stack || undefined }).catch(function () {});
+  }
+  if (CR) {
+    infoP.then(function (i) { CR.setCustomKey({ key: 'surum', value: i.version + ' (' + i.build + ')', type: 'string' }).catch(function () {}); }, function () {});
+    window.addEventListener('error', function (e) { crSend((e.message || 'hata') + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno); });
+    window.addEventListener('unhandledrejection', function (e) { var r = e.reason; crSend('promise: ' + fmtErr(r)); });
+  }
+  window.KZCrash = { log: function (m) { if (CR) CR.log({ message: String(m).slice(0, 200) }).catch(function () {}); } };
+
   Promise.all([restore(), screen()]).then(boot, boot).then(function () { initAds(); initIAP(); checkUpdate(); });
 })();
